@@ -1,0 +1,12 @@
+# Copyright(c) The Maintainers of Nanvix.
+# Licensed under the MIT License.
+
+# Build artifacts
+bin/
+*.o
+*.elf
+
+# IDEs
+*.swo
+*.swp
+*.vscode/
