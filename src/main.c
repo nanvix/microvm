@@ -16,6 +16,8 @@ int main(int argc, char **argv)
     struct vm vm;
     struct vcpu vcpu;
     bool real_mode = true;
+    FILE *vm_stdout = stdout;
+    FILE *vm_stdin = stdin;
 
     size_t memory_size = DEFAULT_MEMORY_SIZE; // Default memory size
     char *kernel_filename = NULL;
@@ -50,6 +52,24 @@ int main(int argc, char **argv)
         else if (strcmp(argv[i], "-protected") == 0) {
             real_mode = false;
         }
+        /* Stdout. */
+        else if (strcmp(argv[i], "-stdout") == 0 && i + 1 < argc) {
+            vm_stdout = fopen(argv[i + 1], "w");
+            if (vm_stdout == NULL) {
+                perror("fopen");
+                return 1;
+            }
+            i++;
+        }
+        /* Stdin. */
+        else if (strcmp(argv[i], "-stdin") == 0 && i + 1 < argc) {
+            vm_stdin = fopen(argv[i + 1], "r");
+            if (vm_stdin == NULL) {
+                perror("fopen");
+                return 1;
+            }
+            i++;
+        }
     }
 
     if (kernel_filename == NULL) {
@@ -60,7 +80,7 @@ int main(int argc, char **argv)
 
     uint64_t total_start = rdtsc();
 
-    vm_init(&vm, memory_size);
+    vm_init(&vm, memory_size, vm_stdout, vm_stdin);
     vcpu_init(&vm, &vcpu);
     uint32_t entry = load_elf32(vm.mem, memory_size, kernel_filename);
 
@@ -70,6 +90,10 @@ int main(int argc, char **argv)
 
     uint64_t cycles = total_end - total_start;
     printf("%ld cycles, %f us\n", cycles, ((double)cycles / 2.6e9) * 1e6);
+
+    // Cleanup.
+    fclose(vm_stdout);
+    fclose(vm_stdin);
 
     return (0);
 }

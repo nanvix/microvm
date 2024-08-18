@@ -7,13 +7,19 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #define DEFAULT_MEMORY_SIZE (128 * 1024 * 1024)
+
+#define STDOUT_PORT 0xE9
+#define STDIN_PORT 0xE9
 
 struct vm {
     int sys_fd;
     int fd;
     char *mem;
+    FILE *vm_stdout;
+    FILE *vm_stdin;
 };
 
 struct vcpu {
@@ -24,7 +30,8 @@ struct vcpu {
 extern int vm_run(bool real_mode, struct vm *vm, struct vcpu *vcpu,
                   uint32_t entry);
 extern void vcpu_init(struct vm *vm, struct vcpu *vcpu);
-extern void vm_init(struct vm *vm, size_t mem_size);
+extern void vm_init(struct vm *vm, size_t mem_size, FILE *vm_stdout,
+                    FILE *vm_stdin);
 
 static inline uint64_t rdtsc(void)
 {

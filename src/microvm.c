@@ -24,7 +24,7 @@
 // vm_init()
 //==================================================================================================
 
-void vm_init(struct vm *vm, size_t mem_size)
+void vm_init(struct vm *vm, size_t mem_size, FILE *vm_stdout, FILE *vm_stdin)
 {
     /* Open KVM endpoint. */
     vm->sys_fd = open("/dev/kvm", O_RDWR);
@@ -54,6 +54,9 @@ void vm_init(struct vm *vm, size_t mem_size)
         perror("KVM_CREATE_VM");
         exit(1);
     }
+
+    vm->vm_stdout = vm_stdout;
+    vm->vm_stdin = vm_stdin;
 
     vm->mem = mmap(NULL,
                    mem_size,
@@ -147,8 +150,6 @@ int vm_run(bool real_mode, struct vm *vm, struct vcpu *vcpu, uint32_t entry)
     struct kvm_sregs sregs;
     struct kvm_regs regs;
 
-    ((void)vm);
-
     if (ioctl(vcpu->fd, KVM_GET_SREGS, &sregs) < 0) {
         perror("KVM_GET_SREGS");
         exit(1);
@@ -194,14 +195,14 @@ int vm_run(bool real_mode, struct vm *vm, struct vcpu *vcpu, uint32_t entry)
             /* Check if I/O is an output. */
             if (vcpu->kvm_run->io.direction == KVM_EXIT_IO_OUT) {
                 /* Check if debug command was issued. */
-                if (vcpu->kvm_run->io.port == 0xE9) {
-                    char *p = (char *)vcpu->kvm_run;
-                    fwrite(p + vcpu->kvm_run->io.data_offset,
-                           vcpu->kvm_run->io.size,
-                           1,
-                           stdout);
-                    fflush(stdout);
-                    continue;
+                if (vcpu->kvm_run->io.port == STDOUT_PORT) {
+                    char *p =
+                        (char *)vcpu->kvm_run + vcpu->kvm_run->io.data_offset;
+                    size_t size = vcpu->kvm_run->io.size;
+                    uint32_t value;
+                    memcpy(&value, p, size);
+                    fwrite(p, size, 1, vm->vm_stdout);
+                    fflush(vm->vm_stdout);
                 }
                 /* Check if shutdown command was issued. */
                 else if (vcpu->kvm_run->io.port == 0x604) {
@@ -214,6 +215,20 @@ int vm_run(bool real_mode, struct vm *vm, struct vcpu *vcpu, uint32_t entry)
                     if (value == 0x2000) {
                         return (0);
                     }
+                }
+            } else {
+                if (vcpu->kvm_run->io.port == STDIN_PORT) {
+                    void *p =
+                        (char *)vcpu->kvm_run + vcpu->kvm_run->io.data_offset;
+                    size_t size = vcpu->kvm_run->io.size;
+                    uint32_t value = 0;
+                    if (fread(&value, size, 1, vm->vm_stdin) == 0) {
+                        if (!feof(stdin)) {
+                            perror("failed to read from vm_stdin");
+                            exit(1);
+                        }
+                    }
+                    memcpy(p, &value, size);
                 }
             }
             break;
