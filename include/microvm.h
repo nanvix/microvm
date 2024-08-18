@@ -4,6 +4,7 @@
 #ifndef MICROVM_H_
 #define MICROVM_H_
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -20,7 +21,8 @@ struct vcpu {
     struct kvm_run *kvm_run;
 };
 
-extern int vm_run(struct vm *vm, struct vcpu *vcpu, uint32_t entry);
+extern int vm_run(bool real_mode, struct vm *vm, struct vcpu *vcpu,
+                  uint32_t entry);
 extern void vcpu_init(struct vm *vm, struct vcpu *vcpu);
 extern void vm_init(struct vm *vm, size_t mem_size);
 

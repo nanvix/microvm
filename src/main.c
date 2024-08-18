@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 #include "microvm.h"
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -14,6 +15,7 @@ int main(int argc, char **argv)
 {
     struct vm vm;
     struct vcpu vcpu;
+    bool real_mode = true;
 
     size_t memory_size = DEFAULT_MEMORY_SIZE; // Default memory size
     char *kernel_filename = NULL;
@@ -44,6 +46,10 @@ int main(int argc, char **argv)
 
             i++;
         }
+        /* Protected mode. */
+        else if (strcmp(argv[i], "-protected") == 0) {
+            real_mode = false;
+        }
     }
 
     if (kernel_filename == NULL) {
@@ -58,7 +64,7 @@ int main(int argc, char **argv)
     vcpu_init(&vm, &vcpu);
     uint32_t entry = load_elf32(vm.mem, memory_size, kernel_filename);
 
-    vm_run(&vm, &vcpu, entry);
+    vm_run(real_mode, &vm, &vcpu, entry);
 
     uint64_t total_end = rdtsc();
 

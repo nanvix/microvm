@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <linux/kvm.h>
 #include <microvm.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -107,11 +108,41 @@ void vcpu_init(struct vm *vm, struct vcpu *vcpu)
     }
 }
 
+static void setup_real_mode(struct kvm_sregs *sregs)
+{
+    sregs->cs.selector = 0;
+    sregs->cs.base = 0;
+}
+
+static void setup_protected_mode(struct kvm_sregs *sregs)
+{
+    struct kvm_segment seg = {
+        .base = 0,
+        .limit = 0xffffffff,
+        .selector = 1 << 3,
+        .present = 1,
+        .type = 11,
+        .dpl = 0,
+        .db = 1,
+        .s = 1,
+        .l = 0,
+        .g = 1,
+    };
+
+    sregs->cr0 |= 1u;
+
+    sregs->cs = seg;
+
+    seg.type = 3;
+    seg.selector = 2 << 3;
+    sregs->ds = sregs->es = sregs->fs = sregs->gs = sregs->ss = seg;
+}
+
 //==================================================================================================
 // vm_run()
 //==================================================================================================
 
-int vm_run(struct vm *vm, struct vcpu *vcpu, uint32_t entry)
+int vm_run(bool real_mode, struct vm *vm, struct vcpu *vcpu, uint32_t entry)
 {
     struct kvm_sregs sregs;
     struct kvm_regs regs;
@@ -123,9 +154,11 @@ int vm_run(struct vm *vm, struct vcpu *vcpu, uint32_t entry)
         exit(1);
     }
 
-    /* Set real mode. */
-    sregs.cs.selector = 0;
-    sregs.cs.base = 0;
+    if (real_mode) {
+        setup_real_mode(&sregs);
+    } else {
+        setup_protected_mode(&sregs);
+    }
 
     if (ioctl(vcpu->fd, KVM_SET_SREGS, &sregs) < 0) {
         perror("KVM_SET_SREGS");
