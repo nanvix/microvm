@@ -78,6 +78,8 @@ _start:
     xorl %ebx, %ebx
     xorl %ecx, %ecx
     xorl %edx, %edx
+    xorl %edi, %edi
+    xorl %esi, %esi
 
     /* Switch to protected mode. */
     lgdt  gdtptr
