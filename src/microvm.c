@@ -69,6 +69,7 @@ void vm_init(struct vm *vm, size_t mem_size, FILE *vm_stdout, FILE *vm_stdin)
         exit(1);
     }
 
+    vm->mem_size = mem_size;
     madvise(vm->mem, mem_size, MADV_MERGEABLE);
 
     struct kvm_userspace_memory_region memreg = {};
@@ -172,6 +173,13 @@ int vm_run(bool real_mode, struct vm *vm, struct vcpu *vcpu, uint32_t entry)
     /* Clear all FLAGS bits, except bit 1 which is always set. */
     regs.rflags = 2;
     regs.rip = entry;
+    regs.rax = 0x0c00ffee;
+
+    // Encode initrd location and size:
+    // - Lower 12 bits encode the size in 4KB pages
+    // - Higher bits encode the base address
+    regs.rbx = (vm->mmap.initrd_base & 0xfffff000) |
+               ((vm->mmap.initrd_size >> 12) & 0xfff);
 
     if (ioctl(vcpu->fd, KVM_SET_REGS, &regs) < 0) {
         perror("KVM_SET_REGS");

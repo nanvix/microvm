@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 #include "microvm.h"
+#include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -9,11 +10,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-extern uint32_t load_elf32(char *memory, size_t mem_size, const char *filename);
+extern int load_elf32(struct vm *vm, const char *filename, uint32_t *entry);
+extern int load_initrd(struct vm *vm, const char *filename);
 
 int main(int argc, char **argv)
 {
-    struct vm vm;
+    struct vm vm = {};
     struct vcpu vcpu;
     bool real_mode = true;
     FILE *vm_stdout = stdout;
@@ -21,12 +23,18 @@ int main(int argc, char **argv)
 
     size_t memory_size = DEFAULT_MEMORY_SIZE; // Default memory size
     char *kernel_filename = NULL;
+    char *initrd_filename = NULL;
 
     // Parse command-line arguments.
     for (int i = 1; i < argc; i++) {
         /* Kernel image. */
         if (strcmp(argv[i], "-kernel") == 0 && i + 1 < argc) {
             kernel_filename = argv[i + 1];
+            i++;
+        }
+        /* Init RAM Disk. */
+        else if (strcmp(argv[i], "-initrd") == 0 && i + 1 < argc) {
+            initrd_filename = argv[i + 1];
             i++;
         }
         /* Memory size. */
@@ -82,7 +90,17 @@ int main(int argc, char **argv)
 
     vm_init(&vm, memory_size, vm_stdout, vm_stdin);
     vcpu_init(&vm, &vcpu);
-    uint32_t entry = load_elf32(vm.mem, memory_size, kernel_filename);
+    uint32_t entry = 0;
+    if (load_elf32(&vm, kernel_filename, &entry) != 0) {
+        exit(1);
+    }
+
+    // Load initrd.
+    if (initrd_filename != NULL) {
+        if (load_initrd(&vm, initrd_filename) != 0) {
+            exit(1);
+        }
+    }
 
     vm_run(real_mode, &vm, &vcpu, entry);
 

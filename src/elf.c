@@ -1,6 +1,7 @@
 // Copyright(c) The Maintainers of Nanvix.
 // Licensed under the MIT License.
 
+#include "microvm.h"
 #include <elf.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -11,13 +12,27 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-uint32_t load_elf32(char *memory, size_t mem_size, const char *filename)
+int load_elf32(struct vm *vm, const char *filename, uint32_t *entry)
 {
     int fd;
     struct stat st;
     Elf32_Ehdr *ehdr;
     Elf32_Phdr *phdr;
     char *phdr_table;
+    uint32_t first_address = UINT32_MAX;
+    uint32_t last_address = 0;
+
+    // Check if pointer to virtual machine is valid.
+    if (vm == NULL) {
+        perror("invalid virtual machine pointer\n");
+        return (-1);
+    }
+
+    /* Check if entry pointer storage location is valid. */
+    if (entry == NULL) {
+        perror("invalid entry pointer storage location\n");
+        return (-1);
+    }
 
     /* Open ELF file. */
     if ((fd = open(filename, O_RDONLY)) < 0) {
@@ -39,7 +54,7 @@ uint32_t load_elf32(char *memory, size_t mem_size, const char *filename)
     }
 
     /* Get entry point. */
-    const uint32_t entry = ehdr->e_entry;
+    *entry = ehdr->e_entry;
 
     /* Check ELF magic number. */
     if (ehdr->e_ident[EI_MAG0] != ELFMAG0 ||
@@ -98,15 +113,26 @@ uint32_t load_elf32(char *memory, size_t mem_size, const char *filename)
             continue;
 
         /* Check if segment is within memory bounds. */
-        if (phdr->p_vaddr + phdr->p_memsz > mem_size) {
+        if (phdr->p_vaddr + phdr->p_memsz > vm->mem_size) {
             fprintf(stderr, "segment %zu is out of memory bounds\n", i);
             return (-1);
         }
 
         /* Copy segment into memory. */
-        memcpy(memory + phdr->p_vaddr,
+        memcpy(vm->mem + phdr->p_vaddr,
                (char *)ehdr + phdr->p_offset,
                phdr->p_filesz);
+
+        // Update first address.
+        if (phdr->p_vaddr < first_address) {
+            first_address = phdr->p_vaddr;
+        }
+
+        // Update last address.
+        uint32_t segment_end = phdr->p_vaddr + phdr->p_memsz;
+        if (segment_end > last_address) {
+            last_address = segment_end;
+        }
     }
 
     /* Unmap ELF file. */
@@ -121,5 +147,9 @@ uint32_t load_elf32(char *memory, size_t mem_size, const char *filename)
         return (-1);
     }
 
-    return (entry);
+    // Set size of loaded ELF file.
+    vm->mmap.kernel_base = first_address;
+    vm->mmap.kernel_size = last_address - first_address;
+
+    return (0);
 }

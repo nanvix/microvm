@@ -11,13 +11,26 @@
 
 #define DEFAULT_MEMORY_SIZE (128 * 1024 * 1024)
 
+// Base address of initrd.
+#define INITRD_BASE 0x00800000
+
+// Page size.
+#define PAGE_SIZE 4096
+
 #define STDOUT_PORT 0xE9
 #define STDIN_PORT 0xE9
 
 struct vm {
+    struct {
+        uint32_t kernel_base;
+        size_t kernel_size;
+        uint32_t initrd_base;
+        size_t initrd_size;
+    } mmap;
     int sys_fd;
     int fd;
     char *mem;
+    size_t mem_size;
     FILE *vm_stdout;
     FILE *vm_stdin;
 };
