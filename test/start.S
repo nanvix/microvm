@@ -124,13 +124,13 @@ start32:
 
 .align 4
 gdt:
-  NULL_SEGMENT
-  KERNEL_SEGMENT(SEG_X|SEG_R, 0, 0xffffffff)
-  KERNEL_SEGMENT(SEG_W, 0, 0xffffffff)
+    NULL_SEGMENT
+    KERNEL_SEGMENT(SEG_X|SEG_R, 0, 0xffffffff)
+    KERNEL_SEGMENT(SEG_W, 0, 0xffffffff)
 
 gdtptr:
-  .word   (gdtptr - gdt - 1)
-  .long   gdt
+    .word  (gdtptr - gdt - 1)
+    .long  gdt
 
 /*================================================================================================*
  * BSS Section                                                                                    *
