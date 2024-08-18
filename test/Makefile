@@ -25,7 +25,7 @@ BIN=hello-world.elf
 CFLAGS := -m32 -nostdlib -ffreestanding -march=pentium -Wall -Wextra -Werror -O3
 
 # Linker flags.
-LDFLAGS := -m32 -no-pie -nostdlib -nostartfiles -ffreestanding -T $(BUILD_DIR)/link.ld
+LDFLAGS := -m32 -Wl,--build-id=none -no-pie -nostdlib -nostartfiles -ffreestanding -T $(BUILD_DIR)/link.ld
 
 #===================================================================================================
 # Build Targets
