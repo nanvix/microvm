@@ -6,7 +6,10 @@
 
 static void outb(uint16_t port, uint8_t value)
 {
-    asm("outb %0,%1" : /* empty */ : "a"(value), "Nd"(port) : "memory");
+    __asm__ __volatile__("outb %0,%1"
+                         : /* empty */
+                         : "a"(value), "Nd"(port)
+                         : "memory");
 }
 
 void kmain(void)
