@@ -38,7 +38,7 @@ all: $(OBJ)
 # Cleans everything.
 clean:
 	rm -f $(OBJ)
-	rm -f $(BINARIES_DIR)/$(BIN).elf
+	rm -f $(BINARIES_DIR)/$(BIN)
 
 #===================================================================================================
 

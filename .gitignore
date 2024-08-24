@@ -5,8 +5,15 @@
 bin/
 *.o
 *.elf
+*.exe
+*.obj
 
 # IDEs
 *.swo
 *.swp
 *.vscode/
+
+
+# Added by cargo
+Cargo.lock
+/target

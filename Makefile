@@ -8,7 +8,6 @@
 export ROOT_DIR     := $(CURDIR)
 export BINARIES_DIR ?= $(ROOT_DIR)/bin
 export BUILD_DIR    := $(ROOT_DIR)/build
-export INCLUDE_DIR  := $(ROOT_DIR)/include
 export SOURCES_DIR  := $(ROOT_DIR)/src
 export TESTS_DIR    := $(ROOT_DIR)/test
 
@@ -16,6 +15,7 @@ export TESTS_DIR    := $(ROOT_DIR)/test
 # Toolchain Configuration
 #===================================================================================================
 
+export CARGO = $(HOME)/.cargo/bin/cargo
 export CC := gcc
 export LD := gcc
 
@@ -35,11 +35,12 @@ clean: clean-tests clean-microvm
 
 # Builds microvm.
 all-microvm:
-	$(MAKE) -C $(SOURCES_DIR) all
+	$(CARGO) build --release
 
 # Cleans microvm build
 clean-microvm:
-	$(MAKE) -C $(SOURCES_DIR) clean
+	$(CARGO) clean
+	rm -rf Cargo.lock target
 
 # Builds tests.
 all-tests:
@@ -51,4 +52,4 @@ clean-tests:
 
 # Runs tests.
 run: all
-	sudo -E $(BINARIES_DIR)/microvm.elf -kernel $(BINARIES_DIR)/hello-world.elf -memory 4MB
+	$(CARGO) run --release -- -kernel $(BINARIES_DIR)/hello-world.elf

@@ -5,7 +5,8 @@
     IndentWidth: 4,
     BreakBeforeBraces: Linux,
     BinPackArguments: false,
-    ColumnLimit: 80,
+    ColumnLimit: 100,
+    IndentCaseLabels: true,
     AllowAllParametersOfDeclarationOnNextLine: true,
     AllowAllArgumentsOnNextLine: true,
 }
