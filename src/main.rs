@@ -5,8 +5,8 @@
 //! # MicroVM
 //!
 //! MicroVM is a ultra-lightweight virtual machine that is designed to run the
-//! [Nanvix](https://github.com/nanvix/) operating system. Currently Linux KVM is supported as
-//! backend.
+//! [Nanvix](https://github.com/nanvix/) operating system. Currently, Microsoft Hyper-V and Linux
+//! KVM are supported as backends.
 //!
 
 //==================================================================================================
@@ -49,6 +49,9 @@ mod profiler;
 
 #[cfg(target_os = "linux")]
 mod kvm;
+
+#[cfg(target_os = "windows")]
+mod mshv;
 
 //==================================================================================================
 // Imports

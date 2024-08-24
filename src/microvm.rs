@@ -5,7 +5,7 @@
 //! # MicroVM
 //!
 //! This module contains the front-end implementation of the MicroVM. Backend-end implementations
-//! are provided by the [`kvm`](crate::kvm) modules.
+//! are provided by the [`kvm`](crate::kvm) and [`mshv`](crate::mshv) modules.
 //!
 
 //==================================================================================================
@@ -19,6 +19,18 @@ use crate::kvm::{
     vcpu::{
         VirtualProcessor,
         VirtualProcessorExitContext,
+        VirtualProcessorExitReason,
+    },
+    vmem::VirtualMemory,
+};
+
+#[cfg(target_os = "windows")]
+use crate::mshv::{
+    emulator::Emulator,
+    partition::VirtualPartition,
+    vcpu::{
+        VirtualExitProcessorContext,
+        VirtualProcessor,
         VirtualProcessorExitReason,
     },
     vmem::VirtualMemory,
