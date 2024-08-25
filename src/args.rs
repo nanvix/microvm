@@ -195,12 +195,13 @@ impl Args {
     ///
     pub fn usage() {
         eprintln!(
-            "Usage: {} {} <kernel> [{} <size>] [{} <file>] [{} <file>]",
+            "Usage: {} {} <kernel> [{} <size>] [{} <file>] [{} <file>] [{} <file>]",
             env::args()
                 .next()
                 .unwrap_or(config::PROGRAM_NAME.to_string()),
             Self::OPT_KERNEL,
             Self::OPT_MEMORY_SIZE,
+            Self::OPT_INITRD,
             Self::OPT_STDOUT,
             Self::OPT_STDIN
         );
