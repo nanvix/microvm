@@ -135,6 +135,31 @@ impl Elf32Fhdr {
     }
 }
 
+///
+/// # Description
+///
+/// Loads an ELF file into memory.
+///
+/// # Parameters
+///
+/// - `destination`: Destination address in memory.
+/// - `source`: Source address in memory.
+/// - `max_offset`: Maximum offset in memory.
+///
+/// # Returns
+///
+/// Upon successful completion, this function returns a tuple containing the entry point, the first
+/// address, and the size of the program that was loaded into memory. Otherwise, it returns an error.
+///
+/// # Safety
+///
+/// This function is unsafe because it manipulates raw pointers and is up to the caller to ensure
+/// that the following conditions are met:
+///
+/// - The `destination` address is valid.
+/// - The `source` address is valid.
+/// - The `max_offset` is valid.
+///
 pub unsafe fn load(
     destination: *mut std::ffi::c_void,
     source: *const u8,
