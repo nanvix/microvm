@@ -165,13 +165,13 @@ pub unsafe fn load(
     source: *const u8,
     max_offset: usize,
 ) -> Result<(usize, usize, usize)> {
-    let mut first_address = usize::MAX;
-    let mut last_address = 0;
+    let mut first_address: usize = usize::MAX;
+    let mut last_address: usize = 0;
 
     // Get entry point.
-    let ehdr = source as *const Elf32Fhdr;
+    let ehdr: *const Elf32Fhdr = source as *const Elf32Fhdr;
 
-    let entry = unsafe { (*ehdr).e_entry } as usize;
+    let entry: usize = (*ehdr).e_entry as usize;
     trace!("entry point: {:#010x}", entry);
 
     // Check if ELF magic number is valid.
@@ -209,7 +209,7 @@ pub unsafe fn load(
     }
 
     // Get program header table.
-    let phdr = (source as usize + (*ehdr).e_phoff as usize) as *const Elf32Phdr;
+    let phdr: *const Elf32Phdr = (source as usize + (*ehdr).e_phoff as usize) as *const Elf32Phdr;
 
     // Load program segments.
     for i in 0..(*ehdr).e_phnum {
@@ -217,10 +217,10 @@ pub unsafe fn load(
 
         // Loadable segment.
         if phdr.p_type == PT_LOAD {
-            let offset = phdr.p_offset as usize;
-            let vaddr = phdr.p_vaddr as usize;
-            let filesz = phdr.p_filesz as usize;
-            let memsz = phdr.p_memsz as usize;
+            let offset: usize = phdr.p_offset as usize;
+            let vaddr: usize = phdr.p_vaddr as usize;
+            let filesz: usize = phdr.p_filesz as usize;
+            let memsz: usize = phdr.p_memsz as usize;
 
             // Check if segment fits in memory.
             if vaddr + memsz > max_offset {
@@ -241,10 +241,10 @@ pub unsafe fn load(
             );
 
             // Copy segment to memory.
-            let src = ehdr as *const u8;
-            let src = src.add(offset);
-            let dst = destination as *mut u8;
-            let dst = dst.add(vaddr);
+            let src: *const u8 = ehdr as *const u8;
+            let src: *const u8 = src.add(offset);
+            let dst: *mut u8 = destination as *mut u8;
+            let dst: *mut u8 = dst.add(vaddr);
             std::ptr::copy_nonoverlapping(src, dst, filesz);
 
             // Update first address.
