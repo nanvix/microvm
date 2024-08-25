@@ -89,7 +89,8 @@ impl Emulator {
                 },
                 // Read from an I/O port that is not supported.
                 _ => {
-                    let reason: String = format!("read from unsupported port i/o (port={})", port);
+                    let reason: String =
+                        format!("read from unsupported port i/o (port={:#06x})", port);
                     error!("handle_pmio_access(): {}", reason);
                     anyhow::bail!(reason);
                 },
@@ -107,7 +108,8 @@ impl Emulator {
                 },
                 // Write to an I/O port that is not supported.
                 _ => {
-                    let reason: String = format!("write to unsupported port i/o (port={})", port);
+                    let reason: String =
+                        format!("write to unsupported port i/o (port={:#06x})", port);
                     error!("handle_pmio_access(): {}", reason);
                     anyhow::bail!(reason);
                 },
