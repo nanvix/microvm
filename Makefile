@@ -10,6 +10,7 @@ export BINARIES_DIR ?= $(ROOT_DIR)/bin
 export BUILD_DIR    := $(ROOT_DIR)/build
 export SOURCES_DIR  := $(ROOT_DIR)/src
 export TESTS_DIR    := $(ROOT_DIR)/test
+export INSTALL_DIR  := $(HOME)/microvm/bin
 
 #===================================================================================================
 # Toolchain Configuration
@@ -18,6 +19,21 @@ export TESTS_DIR    := $(ROOT_DIR)/test
 export CARGO = $(HOME)/.cargo/bin/cargo
 export CC := gcc
 export LD := gcc
+
+# Cargo Options
+export CARGO_FEATURES ?= --no-default-features
+ifeq ($(RELEASE),no)
+export CARGO_FLAGS :=
+else
+export CARGO_FLAGS := --release
+endif
+
+#===================================================================================================
+# Build Artifacts
+#===================================================================================================
+
+# Binary file
+export BIN := microvm
 
 #===================================================================================================
 # Build Targets
@@ -35,7 +51,7 @@ clean: clean-tests clean-microvm
 
 # Builds microvm.
 all-microvm:
-	$(CARGO) build --release
+	$(CARGO) build --all $(CARGO_FLAGS) $(CARGO_FEATURES)
 
 # Cleans microvm build
 clean-microvm:
@@ -53,3 +69,11 @@ clean-tests:
 # Runs tests.
 run: all
 	$(CARGO) run --release -- -kernel $(BINARIES_DIR)/hello-world.elf
+
+install: all-microvm
+	mkdir -p $(INSTALL_DIR)
+ifeq ($(RELEASE), yes)
+	cp -f --preserve target/release/$(BIN) $(INSTALL_DIR)/$(BIN)
+else
+	cp -f --preserve target/debug/$(BIN) $(INSTALL_DIR)/$(BIN)
+endif
