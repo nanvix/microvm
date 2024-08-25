@@ -78,6 +78,7 @@ jobs:
         port: ${{ secrets.portnum }}
         script: |
           cd microvm
+          sudo -E make clean
           git checkout --force dev
           git clean -fdx
           git remote prune origin
