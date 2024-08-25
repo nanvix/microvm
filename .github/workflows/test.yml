@@ -58,7 +58,10 @@ jobs:
         script: |
           source "$HOME/.cargo/env"
           cd microvm
-          sudo -E make run
+          sudo -E make run | tee output.txt
+          echo "Magic String: $(cat output.txt | tail -n 1)"
+          [ "$(cat output.txt | tail -n 1)" != "Hello, world!" ] && exit 1 || exit 0 ;
+
 
   cleanup:
     name: Cleanup
