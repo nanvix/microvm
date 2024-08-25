@@ -180,32 +180,44 @@ pub unsafe fn load(
         || (*ehdr).e_ident[2] != ELFMAG2 as u8
         || (*ehdr).e_ident[3] != ELFMAG3 as u8
     {
-        anyhow::bail!("header is NULL or invalid magic");
+        let reason: String = format!("header is null or invalid magic");
+        error!("load(): {} (e_ident={:?})", reason, (*ehdr).e_ident);
+        return Err(anyhow::anyhow!(reason));
     }
 
     // Check ELF class.
     if (*ehdr).e_ident[4] != ELFCLASS32 {
-        anyhow::bail!("invalid ELF class");
+        let reason: String = format!("invalid elf class");
+        error!("load(): {} (e_ident={:?})", reason, (*ehdr).e_ident);
+        return Err(anyhow::anyhow!(reason));
     }
 
     // Check data encoding.
     if (*ehdr).e_ident[5] != ELFDATA2LSB {
-        anyhow::bail!("invalid data encoding");
+        let reason: String = format!("invalid data encoding");
+        error!("load(): {} (e_ident={:?})", reason, (*ehdr).e_ident);
+        return Err(anyhow::anyhow!(reason));
     }
 
     // Check version.
     if (*ehdr).e_version != EV_CURRENT {
-        anyhow::bail!("invalid version");
+        let reason: String = format!("invalid version");
+        error!("load(): {} (e_version={})", reason, (*ehdr).e_version);
+        return Err(anyhow::anyhow!(reason));
     }
 
     // Check ELF type.
     if (*ehdr).e_type != ET_EXEC {
-        anyhow::bail!("invalid ELF type");
+        let reason: String = format!("invalid elf type");
+        error!("load(): {} (e_type={})", reason, (*ehdr).e_type);
+        return Err(anyhow::anyhow!(reason));
     }
 
     // Check ELF machine architecture.
     if (*ehdr).e_machine != EM_386 {
-        anyhow::bail!("invalid machine architecture");
+        let reason: String = format!("invalid machine architecture");
+        error!("load(): {} (e_machine={})", reason, (*ehdr).e_machine);
+        return Err(anyhow::anyhow!(reason));
     }
 
     // Get program header table.
