@@ -72,8 +72,8 @@ run: all
 
 install: all-microvm
 	mkdir -p $(INSTALL_DIR)
-ifeq ($(RELEASE), yes)
-	cp -f --preserve target/release/$(BIN) $(INSTALL_DIR)/$(BIN)
-else
+ifeq ($(RELEASE),no)
 	cp -f --preserve target/debug/$(BIN) $(INSTALL_DIR)/$(BIN)
+else
+	cp -f --preserve target/release/$(BIN) $(INSTALL_DIR)/$(BIN)
 endif
