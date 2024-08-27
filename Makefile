@@ -68,7 +68,7 @@ clean-tests:
 
 # Runs tests.
 run: all
-	$(CARGO) run --release -- -kernel $(BINARIES_DIR)/hello-world.elf
+	$(CARGO) run $(CARGO_FLAGS) $(CARGO_FEATURES) -- -kernel $(BINARIES_DIR)/hello-world.elf
 
 install: all-microvm
 	mkdir -p $(INSTALL_DIR)
