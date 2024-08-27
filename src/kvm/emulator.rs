@@ -6,11 +6,7 @@
 //==================================================================================================
 
 use crate::{
-    kvm::vcpu::{
-        VirtualProcessor,
-        VirtualProcessorExitContext,
-        VirtualProcessorRegister,
-    },
+    kvm::vcpu::VirtualProcessorExitContext,
     microvm::MicroVm,
 };
 use ::anyhow::Result;
@@ -71,29 +67,22 @@ impl Emulator {
     ///
     /// # Returns
     ///
-    /// Upon successful completion, this method returns empty. Otherwise, it returns an error.
+    /// Upon successful completion, this method a boolean value that encodes wether the virtual
+    /// processor should be resumed (`true`) or not .(`false`). If an error is encountered, an error
+    /// is returned instead.
     ///
     pub fn handle_pmio_access(
         &mut self,
-        vcpu: &mut VirtualProcessor,
         exit_context: VirtualProcessorExitContext,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         // Parse context.
         match exit_context {
             // Read from an I/O port.
-            VirtualProcessorExitContext::PmioIn(port, size) => match port {
-                // Read from standard input.
-                MicroVm::STDIN_PORT => {
-                    let data: u32 = (self.input)(size)?;
-                    vcpu.set_register(VirtualProcessorRegister::Rdx, data as u64)?;
-                },
+            VirtualProcessorExitContext::PmioIn(port, _) => {
                 // Read from an I/O port that is not supported.
-                _ => {
-                    let reason: String =
-                        format!("read from unsupported port i/o (port={:#06x})", port);
-                    error!("handle_pmio_access(): {}", reason);
-                    anyhow::bail!(reason);
-                },
+                let reason: String = format!("read from unsupported port i/o (port={:#06x})", port);
+                error!("handle_pmio_access(): {}", reason);
+                anyhow::bail!(reason);
             },
             // Write to an I/O port.
             VirtualProcessorExitContext::PmioOut(port, data, size) => match port {
@@ -104,7 +93,7 @@ impl Emulator {
                 // Write to the virtual machine monitor port.
                 MicroVm::VMM_PORT => {
                     // TODO: check if data matches an expected command.
-                    vcpu.poweroff();
+                    return Ok(false);
                 },
                 // Write to an I/O port that is not supported.
                 _ => {
@@ -121,6 +110,6 @@ impl Emulator {
             },
         }
 
-        Ok(())
+        Ok(true)
     }
 }

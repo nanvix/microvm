@@ -201,8 +201,9 @@ impl MicroVm {
                 // The guest requested to access an I/O port.
                 VirtualProcessorExitReason::PmioAccess => {
                     crate::timer!("vm_run_pmio_access");
-                    self.emulator
-                        .handle_pmio_access(&mut self.vcpu, exit_context)?;
+                    if self.emulator.handle_pmio_access(exit_context)? == false {
+                        self.vcpu.poweroff();
+                    }
                 },
 
                 // Virtual machine exited due to an unknown reason.
