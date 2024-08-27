@@ -23,8 +23,8 @@ jobs:
         port: ${{ secrets.portnum }}
         envs: TARGET_BRANCH
         script: |
-          rm -rf microvm
-          git clone --recursive https://github.com/nanvix/microvm.git --branch ${TARGET_BRANCH} microvm
+          rm -rf microvm-release
+          git clone --recursive https://github.com/nanvix/microvm.git --branch ${TARGET_BRANCH} microvm-release
 
   build:
     name: Build
@@ -40,7 +40,7 @@ jobs:
         port: ${{ secrets.portnum }}
         script: |
           source "$HOME/.cargo/env"
-          cd microvm
+          cd microvm-release
           make
 
   test:
@@ -57,7 +57,7 @@ jobs:
         port: ${{ secrets.portnum }}
         script: |
           source "$HOME/.cargo/env"
-          cd microvm
+          cd microvm-release
           sudo -E make run | tee output.txt
           echo "Magic String: $(cat output.txt | tail -n 1)"
           [ "$(cat output.txt | tail -n 1)" != "Hello, world!" ] && exit 1 || exit 0 ;
@@ -77,7 +77,7 @@ jobs:
         key: ${{ secrets.sshkey }}
         port: ${{ secrets.portnum }}
         script: |
-          cd microvm
+          cd microvm-release
           sudo -E make clean
           git checkout --force dev
           git clean -fdx
