@@ -7,10 +7,7 @@
 
 use crate::kvm::{
     partition::VirtualPartition,
-    vcpu::{
-        VirtualProcessorExitContext,
-        VirtualProcessorRegister,
-    },
+    vcpu::VirtualProcessorExitContext,
 };
 use ::anyhow::Result;
 use ::kvm_bindings::{
@@ -91,46 +88,6 @@ impl VirtualProcessor {
 
         // Processor is now online.
         self.online = true;
-
-        Ok(())
-    }
-
-    ///
-    /// # Description
-    ///
-    /// Sets the value of a register.
-    ///
-    /// # Parameters
-    ///
-    /// - `register`: Register to set.
-    /// - `value`: Value to set.
-    ///
-    /// # Returns
-    ///
-    /// Upon successful completion, this method returns empty. Otherwise, it returns an error.
-    ///
-    pub fn set_register(&mut self, register: VirtualProcessorRegister, value: u64) -> Result<()> {
-        crate::timer!("vcpu_set_register");
-
-        // Get current state of registers.
-        let mut vcpu_regs: kvm_regs = self.fd.get_regs()?;
-
-        // Set new value of register.
-        match register {
-            VirtualProcessorRegister::Rax => vcpu_regs.rax = value,
-            VirtualProcessorRegister::Rbx => vcpu_regs.rbx = value,
-            VirtualProcessorRegister::Rcx => vcpu_regs.rcx = value,
-            VirtualProcessorRegister::Rdx => vcpu_regs.rdx = value,
-            VirtualProcessorRegister::Rsi => vcpu_regs.rsi = value,
-            VirtualProcessorRegister::Rdi => vcpu_regs.rdi = value,
-            VirtualProcessorRegister::Rbp => vcpu_regs.rbp = value,
-            VirtualProcessorRegister::Rsp => vcpu_regs.rsp = value,
-            VirtualProcessorRegister::Rip => vcpu_regs.rip = value,
-            VirtualProcessorRegister::Rflags => vcpu_regs.rflags = value,
-        }
-
-        // Set new state of registers.
-        self.fd.set_regs(&vcpu_regs)?;
 
         Ok(())
     }
