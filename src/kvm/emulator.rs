@@ -78,11 +78,21 @@ impl Emulator {
         // Parse context.
         match exit_context {
             // Read from an I/O port.
-            VirtualProcessorExitContext::PmioIn(port, _) => {
+            VirtualProcessorExitContext::PmioIn(port, data) => match port {
+                // Read from standard input.
+                MicroVm::STDIN_PORT => {
+                    let value: u32 = (self.input)(data.len())?;
+                    for i in 0..data.len() {
+                        data[i] = ((value >> (i * 8)) & 0xff) as u8;
+                    }
+                },
                 // Read from an I/O port that is not supported.
-                let reason: String = format!("read from unsupported port i/o (port={:#06x})", port);
-                error!("handle_pmio_access(): {}", reason);
-                anyhow::bail!(reason);
+                _ => {
+                    let reason: String =
+                        format!("read from unsupported port i/o (port={:#06x})", port);
+                    error!("handle_pmio_access(): {}", reason);
+                    anyhow::bail!(reason);
+                },
             },
             // Write to an I/O port.
             VirtualProcessorExitContext::PmioOut(port, data, size) => match port {
