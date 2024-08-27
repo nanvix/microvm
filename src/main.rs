@@ -90,21 +90,31 @@ fn main() -> Result<()> {
     // Input function used for emulating I/O port reads.
     let mut vm_stdin: Option<File> = args.take_vm_stdin();
     let input = move |size| -> Result<u32> {
+        const EOF: u8 = 1 << 7;
         // Check for invalid operand size.
-        if size != 1 {
+        if size < 2 {
             let reason: String = format!("invalid operand size (size={:?})", size);
             error!("input(): {}", reason);
             anyhow::bail!(reason);
         }
 
-        let mut buf: [u8; 1] = [0; 1];
+        let mut buf: [u8; 4] = [0; 4];
 
         // Forward request to backend device.
         match vm_stdin {
             // Read from file.
-            Some(ref mut file) => {
-                file.read_exact(&mut buf)?;
-                Ok(buf[0] as u32)
+            Some(ref mut file) => match file.read_exact(&mut buf[0..1]) {
+                // We succeeded to read a byte.
+                Ok(()) => Ok(u32::from_ne_bytes(buf)),
+                // We reached end-of-file.
+                Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
+                    // Zero-out byte, as the contents of the buffer are undefined.
+                    buf[0] = 0;
+                    buf[3] = EOF;
+                    Ok(u32::from_ne_bytes(buf))
+                },
+                // We failed to read a byte.
+                Err(err) => Err(err.into()),
             },
             // Fallback and read from standard input.
             None => {
