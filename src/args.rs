@@ -16,7 +16,6 @@ use crate::config;
 use ::anyhow::Result;
 use ::std::{
     env,
-    fs::File,
     process,
 };
 
@@ -37,9 +36,11 @@ pub struct Args {
     /// Memory size.
     memory_size: usize,
     /// Standard output.
-    vm_stdout: Option<File>,
+    vm_stdout: Option<String>,
     /// Standard input.
-    vm_stdin: Option<File>,
+    vm_stdin: Option<String>,
+    /// Standard error.
+    vm_stderr: Option<String>,
 }
 
 //==================================================================================================
@@ -49,16 +50,18 @@ pub struct Args {
 impl Args {
     /// Command-line option for printing the help message.
     const OPT_HELP: &'static str = "-help";
-    /// Command-line option for the kernel file.
-    const OPT_KERNEL: &'static str = "-kernel";
     /// Command-line option for initrd file.
     const OPT_INITRD: &'static str = "-initrd";
+    /// Command-line option for the kernel file.
+    const OPT_KERNEL: &'static str = "-kernel";
     /// Command-line option for the memory size.
     const OPT_MEMORY_SIZE: &'static str = "-memory";
-    /// Command-line option for the standard output.
-    const OPT_STDOUT: &'static str = "-stdout";
+    /// Command-line option for the standard error.
+    const OPT_STDERR: &'static str = "-stderr";
     /// Command-line option for the standard input.
     const OPT_STDIN: &'static str = "-stdin";
+    /// Command-line option for the standard output.
+    const OPT_STDOUT: &'static str = "-stdout";
 
     ///
     /// # Description
@@ -76,8 +79,9 @@ impl Args {
         let mut kernel_filename: String = String::new();
         let mut initrd_filename: Option<String> = None;
         let mut memory_size: usize = config::DEFAULT_MEMORY_SIZE;
-        let mut vm_stdout: Option<File> = None;
-        let mut vm_stdin: Option<File> = None;
+        let mut vm_stderr: Option<String> = None;
+        let mut vm_stdin: Option<String> = None;
+        let mut vm_stdout: Option<String> = None;
 
         // Parse command-line arguments.
         let mut i: usize = 1;
@@ -133,26 +137,19 @@ impl Args {
                     }
                     i += 1;
                 },
-                // Set output file.
-                Self::OPT_STDOUT if i + 1 < args.len() => {
-                    // Attempt to open output file.
-                    vm_stdout = match File::options().read(false).write(true).open(&args[i + 1]) {
-                        Ok(file) => Some(file),
-                        Err(e) => {
-                            anyhow::bail!("fopen: {}", e);
-                        },
-                    };
+                // Set error file.
+                Self::OPT_STDERR if i + 1 < args.len() => {
+                    vm_stderr = Some(args[i + 1].clone());
                     i += 1;
                 },
                 // Set input file.
                 Self::OPT_STDIN if i + 1 < args.len() => {
-                    // Attempt to open input file.
-                    vm_stdin = match File::options().read(true).write(false).open(&args[i + 1]) {
-                        Ok(file) => Some(file),
-                        Err(e) => {
-                            anyhow::bail!("fopen: {}", e);
-                        },
-                    };
+                    vm_stdin = Some(args[i + 1].clone());
+                    i += 1;
+                },
+                // Set output file.
+                Self::OPT_STDOUT if i + 1 < args.len() => {
+                    vm_stdout = Some(args[i + 1].clone());
                     i += 1;
                 },
                 // Invalid argument.
@@ -183,8 +180,9 @@ impl Args {
             kernel_filename,
             initrd_filename,
             memory_size,
-            vm_stdout,
+            vm_stderr,
             vm_stdin,
+            vm_stdout,
         })
     }
 
@@ -195,15 +193,16 @@ impl Args {
     ///
     pub fn usage() {
         eprintln!(
-            "Usage: {} {} <kernel> [{} <size>] [{} <file>] [{} <file>] [{} <file>]",
+            "Usage: {} {} <kernel> [{} <size>] [{} <file>] [{} <file>] [{} <file>] [{} <file>]",
             env::args()
                 .next()
                 .unwrap_or(config::PROGRAM_NAME.to_string()),
             Self::OPT_KERNEL,
             Self::OPT_MEMORY_SIZE,
             Self::OPT_INITRD,
+            Self::OPT_STDERR,
+            Self::OPT_STDIN,
             Self::OPT_STDOUT,
-            Self::OPT_STDIN
         );
     }
 
@@ -250,28 +249,43 @@ impl Args {
     ///
     /// # Description
     ///
-    /// Returns the output file file that was passed as a command-line argument to the program.
+    /// Returns the name of the standard error file that was passed as a command-line argument to the
+    /// program.
     ///
     /// # Returns
     ///
-    /// The output file that was passed as a command-line argument to the program. If no output file
-    /// was passed, or this option was already taken, this method returns `None`.
+    /// The name of standard error file that was passed as a command-line argument to the program. If
+    /// no standard error file was passed, this method returns `None`.
     ///
-    pub fn take_vm_stdout(&mut self) -> Option<File> {
-        self.vm_stdout.take()
+    pub fn take_vm_stderr(&mut self) -> Option<String> {
+        self.vm_stderr.take()
     }
 
     ///
     /// # Description
     ///
-    /// Returns the input file that was passed as a command-line argument to the program.
+    /// Returns the name of the  input file that was passed as a command-line argument to the program.
     ///
     /// # Returns
     ///
-    /// The input file that was passed as a command-line argument to the program. If no input file
-    /// was passed, or this option was already taken, this method returns `None`.
+    /// The name of input file that was passed as a command-line argument to the program. If no
+    /// input file was passed, or this option was already taken, this method returns `None`.
     ///
-    pub fn take_vm_stdin(&mut self) -> Option<File> {
+    pub fn take_vm_stdin(&mut self) -> Option<String> {
         self.vm_stdin.take()
+    }
+
+    ///
+    /// # Description
+    ///
+    /// Returns the name of the output file file that was passed as a command-line argument to the program.
+    ///
+    /// # Returns
+    ///
+    /// The name of output file that was passed as a command-line argument to the program. If no
+    /// output file was passed, or this option was already taken, this method returns `None`.
+    ///
+    pub fn take_vm_stdout(&mut self) -> Option<String> {
+        self.vm_stdout.take()
     }
 }

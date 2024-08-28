@@ -40,6 +40,7 @@ macro_rules! timer {
 mod args;
 mod config;
 mod elf;
+mod file;
 mod logging;
 mod microvm;
 mod pal;
@@ -71,13 +72,16 @@ use ::anyhow::Result;
 use ::std::{
     env,
     fs::File,
-    io,
-    io::{
-        Read,
-        Write,
+    io::Write,
+    sync::mpsc,
+    thread::{
+        self,
+        JoinHandle,
     },
 };
 
+//==================================================================================================
+// Standalone Functions
 //==================================================================================================
 
 fn main() -> Result<()> {
@@ -87,8 +91,52 @@ fn main() -> Result<()> {
 
     let mut args: Args = args::Args::parse(env::args().collect())?;
 
+    // Create a channel to connect the VM to the standard input device.
+    let (tx_channel_to_vm, rx_channel_from_stdin): (
+        mpsc::Sender<std::result::Result<u8, anyhow::Error>>,
+        mpsc::Receiver<std::result::Result<u8, anyhow::Error>>,
+    ) = mpsc::channel::<Result<u8>>();
+
+    // Create a channel to connect the VM to the standard output device.
+    let (tx_channel_to_stdout, rx_channel_from_vm): (
+        mpsc::Sender<std::result::Result<u8, anyhow::Error>>,
+        mpsc::Receiver<std::result::Result<u8, anyhow::Error>>,
+    ) = mpsc::channel::<Result<u8>>();
+
+    // Spawn I/O thread.
+    let _io_thread: JoinHandle<()> = {
+        let vm_stdin: Option<String> = args.take_vm_stdin();
+        let vm_stdout: Option<String> = args.take_vm_stdout();
+        thread::spawn(move || {
+            if let Err(e) =
+                file::file_server(vm_stdin, vm_stdout, tx_channel_to_vm, rx_channel_from_vm)
+            {
+                error!("file server has failed: {:?}", e);
+            }
+        })
+    };
+
+    run_vmm(args, rx_channel_from_stdin, tx_channel_to_stdout)?;
+
+    Ok(())
+}
+
+///
+/// # Description
+///
+/// This function runs the virtual machine monitor (VMM) with the given arguments.
+///
+/// # Parameters
+///
+/// * `args` - Arguments for the virtual machine monitor.
+pub fn run_vmm(
+    mut args: Args,
+    rx_channel_from_stdin: mpsc::Receiver<std::result::Result<u8, anyhow::Error>>,
+    tx_channel_to_stdout: mpsc::Sender<std::result::Result<u8, anyhow::Error>>,
+) -> Result<()> {
+    crate::timer!("main");
+
     // Input function used for emulating I/O port reads.
-    let mut vm_stdin: Option<File> = args.take_vm_stdin();
     let input = move |size| -> Result<u32> {
         const EOF: u8 = 1 << 7;
         // Check for invalid operand size.
@@ -100,85 +148,104 @@ fn main() -> Result<()> {
 
         let mut buf: [u8; 4] = [0; 4];
 
-        // Forward request to backend device.
-        match vm_stdin {
-            // Read from file.
-            Some(ref mut file) => match file.read_exact(&mut buf[0..1]) {
-                // We succeeded to read a byte.
-                Ok(()) => Ok(u32::from_ne_bytes(buf)),
-                // We reached end-of-file.
-                Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
-                    // Zero-out byte, as the contents of the buffer are undefined.
-                    buf[0] = 0;
-                    buf[3] = EOF;
-                    Ok(u32::from_ne_bytes(buf))
-                },
-                // We failed to read a byte.
-                Err(err) => Err(err.into()),
+        match rx_channel_from_stdin.try_recv() {
+            Ok(Ok(message)) => {
+                buf[0] = message;
+                buf[3] = 0;
+                return Ok(u32::from_ne_bytes(buf));
             },
-            // Fallback and read from standard input.
-            None => {
-                let _guard: std::io::StdinLock<'_> = std::io::stdin().lock();
-                io::stdin().read_exact(&mut buf)?;
-                Ok(buf[0] as u32)
+            Ok(Err(err)) => {
+                let reason: String = format!("failed to receive message: {:?}", err);
+                error!("input(): {}", reason);
+                anyhow::bail!(reason);
             },
-        }
-    };
-
-    // Output function used for emulating I/O port writes.
-    let mut vm_stdout: Option<File> = args.take_vm_stdout();
-    let output = move |data, size| -> Result<()> {
-        // Check for invalid operand size.
-        if size != 1 {
-            let reason: String = format!("invalid operand size (data={:?}, size={:?})", data, size);
-            error!("output(): {}", reason);
-            anyhow::bail!(reason);
-        }
-
-        // Convert data to a character.
-        let ch: char = match char::from_u32(data) {
-            // Valid character.
-            Some(ch) => ch,
-            // Invalid character.
-            None => {
-                let reason: String = format!("invalid character (data={:?})", data);
-                error!("output(): {}", reason);
+            Err(mpsc::TryRecvError::Empty) => {
+                buf[3] = EOF;
+                return Ok(u32::from_ne_bytes(buf));
+            },
+            Err(mpsc::TryRecvError::Disconnected) => {
+                let reason: String = format!("channel has been disconnected");
+                error!("input(): {}", reason);
                 anyhow::bail!(reason);
             },
         };
-
-        let buf: &[u8] = &[ch as u8];
-
-        // Forward request to backend device.
-        match vm_stdout {
-            // Write to file.
-            Some(ref mut file) => {
-                file.write(buf)?;
-            },
-            // Fallback and write to standard output.
-            None => {
-                let _guard: std::io::StdoutLock<'_> = std::io::stdout().lock();
-                io::stdout().write(buf)?;
-            },
-        }
-
-        Ok(())
     };
 
-    {
-        crate::timer!("main");
-        let mut microvm: MicroVm =
-            MicroVm::new(args.memory_size(), Box::new(input), Box::new(output))?;
+    // Obtain a buffered write for the virtual machine's standard error device.
+    let mut file_writer: Box<dyn Write> = get_vm_stderr_writer(args.take_vm_stderr())?;
 
-        let rip: u64 = microvm.load_kernel(args.kernel_filename())?;
-        if let Some(ref initrd_filename) = args.initrd_filename() {
-            microvm.load_initrd(initrd_filename)?;
+    // Output function used for emulating I/O port writes.
+    let output = move |data, size| -> Result<()> {
+        // Parse operand size do determine how to handle the operation.
+        if size == 1 {
+            // Write to the standard error device.
+
+            // Convert data to a character.
+            let ch: char = match char::from_u32(data) {
+                // Valid character.
+                Some(ch) => ch,
+                // Invalid character.
+                None => {
+                    let reason: String = format!("invalid character (data={:?})", data);
+                    error!("output(): {}", reason);
+                    anyhow::bail!(reason);
+                },
+            };
+
+            let buf: &[u8] = &[ch as u8];
+
+            file_writer.write(buf)?;
+
+            Ok(())
+        } else {
+            // Write to the standard output device.
+            tx_channel_to_stdout.send(Ok(data as u8))?;
+            Ok(())
         }
+    };
 
-        microvm.reset(rip)?;
+    let mut microvm: MicroVm = MicroVm::new(args.memory_size(), Box::new(input), Box::new(output))?;
 
-        microvm.run()?;
+    let rip: u64 = microvm.load_kernel(args.kernel_filename())?;
+    if let Some(ref initrd_filename) = args.initrd_filename() {
+        microvm.load_initrd(initrd_filename)?;
     }
 
+    microvm.reset(rip)?;
+
+    microvm.run()?;
+
     Ok(())
+}
+
+///
+/// # Description
+///
+/// Obtains a buffered writer for the virtual machine's standard error device. If the standard
+/// error device is set to a file, the function attempts to open the file and create a buffered
+/// writer. If the standard error device is not set to a file, the function falls back to stderr.
+///
+/// # Parameters
+///
+/// * `vm_stderr` - The path to the file where the standard error device is set.
+///
+/// # Returns
+///
+/// On success, the function returns a buffered writer for the virtual machine's standard error
+///
+fn get_vm_stderr_writer(vm_stderr: Option<String>) -> Result<Box<dyn Write>> {
+    // Obtain a buffered writer for the virtual machine's standard error device.
+    let file_writer: Box<dyn Write> = if let Some(vm_stderr) = vm_stderr {
+        // Standard error was set to a file. Attempt to open file and create a writer.
+        let file = File::options()
+            .read(false)
+            .write(true)
+            .create(true)
+            .open(&vm_stderr)?;
+        Box::new(file)
+    } else {
+        // Standard error was not set to a file. Fallback to stderr.
+        Box::new(std::io::stderr())
+    };
+    Ok(file_writer)
 }
