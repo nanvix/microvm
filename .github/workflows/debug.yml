@@ -58,7 +58,7 @@ jobs:
         script: |
           source "$HOME/.cargo/env"
           cd microvm-debug
-          sudo -E make RELEASE=no run | tee output.txt
+          sudo -E make RELEASE=no run 2>&1 | tee output.txt
           echo "Magic String: $(cat output.txt | tail -n 1)"
           [ "$(cat output.txt | tail -n 1)" != "Hello, world!" ] && exit 1 || exit 0 ;
 
