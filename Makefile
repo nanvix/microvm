@@ -52,9 +52,15 @@ clean: clean-tests clean-microvm
 # Builds microvm.
 all-microvm:
 	$(CARGO) build --all $(CARGO_FLAGS) $(CARGO_FEATURES)
+ifeq ($(RELEASE),no)
+	cp -f --preserve target/debug/$(BIN) $(BINARIES_DIR)/$(BIN)
+else
+	cp -f --preserve target/release/$(BIN) $(BINARIES_DIR)/$(BIN)
+endif
 
 # Cleans microvm build
 clean-microvm:
+	rm -f $(BINARIES_DIR)/$(BIN)
 	$(CARGO) clean
 	rm -rf Cargo.lock target
 
