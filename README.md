@@ -6,6 +6,12 @@ This repository contains the implementation of an ultra-small and lightweight vi
 
 > Learn more about Nanvix at [https://github.com/nanvix](https://github.com/nanvix).
 
+## Building and Running
+
+```bash
+sudo -E make run
+```
+
 ## Usage Statement
 
 This project is a prototype. As such, we provide no guarantees that it will work and you are assuming any risks with using the code. We welcome comments and feedback. Please send any questions or comments to any [maintainer of the project](https://github.com/orgs/nanvix/people).
