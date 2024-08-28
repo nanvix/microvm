@@ -27,6 +27,9 @@ export CARGO_FLAGS :=
 else
 export CARGO_FLAGS := --release
 endif
+ifeq ($(PROFILER),yes)
+export CARGO_FLAGS += --features profiler
+endif
 
 #===================================================================================================
 # Build Artifacts
