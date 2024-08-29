@@ -22,7 +22,7 @@ BIN=fibonnaci.elf
 #===================================================================================================
 
 # Compiler flags.
-CFLAGS := -m32 -nostdlib -ffreestanding -march=pentium -Wall -Wextra -Werror -O3
+CFLAGS := -m32 -nostdlib -ffreestanding -march=pentium -Wall -Wextra -Werror -O0
 
 # Linker flags.
 LDFLAGS := -m32 -Wl,--build-id=none -no-pie -nostdlib -nostartfiles -ffreestanding -T $(BUILD_DIR)/link.ld
