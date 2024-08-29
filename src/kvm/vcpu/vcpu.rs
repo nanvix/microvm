@@ -75,7 +75,34 @@ impl VirtualProcessor {
         // Reset system registers.
         let mut vcpu_sregs: kvm_sregs = self.fd.get_sregs()?;
         vcpu_sregs.cs.base = 0;
-        vcpu_sregs.cs.selector = 0;
+        vcpu_sregs.cs.limit = 0xffffffff;
+        vcpu_sregs.cs.selector = 1 << 3;
+        vcpu_sregs.cs.type_ = 11;
+        vcpu_sregs.cs.present = 1;
+        vcpu_sregs.cs.dpl = 0;
+        vcpu_sregs.cs.db = 1;
+        vcpu_sregs.cs.s = 1;
+        vcpu_sregs.cs.l = 0;
+        vcpu_sregs.cs.g = 1;
+
+        vcpu_sregs.ds.base = 0;
+        vcpu_sregs.ds.limit = 0xffffffff;
+        vcpu_sregs.ds.selector = 2 << 3;
+        vcpu_sregs.ds.type_ = 3;
+        vcpu_sregs.ds.present = 1;
+        vcpu_sregs.ds.dpl = 0;
+        vcpu_sregs.ds.db = 1;
+        vcpu_sregs.ds.s = 1;
+        vcpu_sregs.ds.l = 0;
+        vcpu_sregs.ds.g = 1;
+
+        vcpu_sregs.es = vcpu_sregs.ds.clone();
+        vcpu_sregs.fs = vcpu_sregs.ds.clone();
+        vcpu_sregs.gs = vcpu_sregs.ds.clone();
+        vcpu_sregs.ss = vcpu_sregs.ds.clone();
+
+        vcpu_sregs.cr0 = vcpu_sregs.cr0 | 1;
+
         self.fd.set_sregs(&vcpu_sregs)?;
 
         // Reset general purpose registers.

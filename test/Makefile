@@ -2,10 +2,18 @@
 # Licensed under the MIT License.
 
 # Builds everything.
-all: all-hello-world all-noop
+all: all-fibonacci all-hello-world all-noop
 
 # Cleans everything.
-clean: clean-hello-world clean-noop
+clean: clean-fibonacci clean-hello-world clean-noop
+
+# Builds fibonacci.
+all-fibonacci:
+	$(MAKE) -C fibonacci all
+
+# Cleans fibonacci.
+clean-fibonacci:
+	$(MAKE) -C fibonacci clean
 
 # Builds hello-world.
 all-hello-world:
