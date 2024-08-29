@@ -206,6 +206,11 @@ impl MicroVm {
                     }
                 },
 
+                // The guest requested to halt.
+                VirtualProcessorExitReason::Halt => {
+                    self.vcpu.poweroff();
+                },
+
                 // Virtual machine exited due to an unknown reason.
                 VirtualProcessorExitReason::Unknown => {
                     return Err(anyhow::anyhow!("unknown exit reason"));
