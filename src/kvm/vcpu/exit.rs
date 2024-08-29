@@ -13,6 +13,8 @@
 pub enum VirtualProcessorExitReason {
     /// Port-mapped I/O access.
     PmioAccess,
+    /// Halt virtual processor.
+    Halt,
     /// Unknown.
     Unknown,
 }
@@ -27,6 +29,8 @@ pub enum VirtualProcessorExitContext<'a> {
     PmioIn(u16, &'a mut [u8]),
     /// Port-mapped I/O output.
     PmioOut(u16, u32, usize),
+    /// Halt virtual processor.
+    Halt,
     /// Unknown.
     Unknown,
 }
@@ -52,6 +56,8 @@ impl<'a> VirtualProcessorExitContext<'_> {
             | VirtualProcessorExitContext::PmioOut(_, _, _) => {
                 &VirtualProcessorExitReason::PmioAccess
             },
+            // Halt virtual processor..
+            VirtualProcessorExitContext::Halt => &VirtualProcessorExitReason::Halt,
             // Unknown.
             VirtualProcessorExitContext::Unknown => &VirtualProcessorExitReason::Unknown,
         }

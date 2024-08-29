@@ -171,11 +171,7 @@ impl VirtualProcessor {
                 Ok(VirtualProcessorExitContext::Unknown)
             },
             // Halt the virtual processor.
-            VcpuExit::Hlt => {
-                // TODO: handle halt.
-                warn!("run(): halt");
-                Ok(VirtualProcessorExitContext::Unknown)
-            },
+            VcpuExit::Hlt => Ok(VirtualProcessorExitContext::Halt),
             // Shutdown the virtual processor.
             VcpuExit::Shutdown => {
                 // TODO: handle shutdown.
