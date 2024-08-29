@@ -112,9 +112,10 @@ start32:
     call kmain
 
     /* Shutdown. */
-    movw $0x2000, %ax
-    movw $0x604, %dx
-    outw %ax, %dx
+    htlt:
+        hlt
+        jmp htlt
+
 
 /*================================================================================================*
  * Data Section                                                                                   *
