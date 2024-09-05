@@ -66,19 +66,24 @@ extern crate kvm_ioctls;
 
 use crate::{
     args::Args,
+    kvm::vmem::VirtualMemory,
     microvm::MicroVm,
 };
 use ::anyhow::Result;
 use ::std::{
+    cell::RefCell,
     env,
     fs::File,
     io::Write,
+    mem,
+    rc::Rc,
     sync::mpsc,
     thread::{
         self,
         JoinHandle,
     },
 };
+use ::sys::ipc::Message;
 
 //==================================================================================================
 // Standalone Functions
@@ -93,15 +98,15 @@ fn main() -> Result<()> {
 
     // Create a channel to connect the VM to the standard input device.
     let (tx_channel_to_vm, rx_channel_from_stdin): (
-        mpsc::Sender<std::result::Result<u8, anyhow::Error>>,
-        mpsc::Receiver<std::result::Result<u8, anyhow::Error>>,
-    ) = mpsc::channel::<Result<u8>>();
+        mpsc::Sender<std::result::Result<[u8; mem::size_of::<Message>()], anyhow::Error>>,
+        mpsc::Receiver<std::result::Result<[u8; mem::size_of::<Message>()], anyhow::Error>>,
+    ) = mpsc::channel::<Result<[u8; mem::size_of::<Message>()]>>();
 
     // Create a channel to connect the VM to the standard output device.
     let (tx_channel_to_stdout, rx_channel_from_vm): (
-        mpsc::Sender<std::result::Result<u8, anyhow::Error>>,
-        mpsc::Receiver<std::result::Result<u8, anyhow::Error>>,
-    ) = mpsc::channel::<Result<u8>>();
+        mpsc::Sender<std::result::Result<[u8; mem::size_of::<Message>()], anyhow::Error>>,
+        mpsc::Receiver<std::result::Result<[u8; mem::size_of::<Message>()], anyhow::Error>>,
+    ) = mpsc::channel::<Result<[u8; mem::size_of::<Message>()]>>();
 
     // Spawn I/O thread.
     let _io_thread: JoinHandle<()> = {
@@ -131,28 +136,28 @@ fn main() -> Result<()> {
 /// * `args` - Arguments for the virtual machine monitor.
 pub fn run_vmm(
     mut args: Args,
-    rx_channel_from_stdin: mpsc::Receiver<std::result::Result<u8, anyhow::Error>>,
-    tx_channel_to_stdout: mpsc::Sender<std::result::Result<u8, anyhow::Error>>,
+    rx_channel_from_stdin: mpsc::Receiver<
+        std::result::Result<[u8; mem::size_of::<Message>()], anyhow::Error>,
+    >,
+    tx_channel_to_stdout: mpsc::Sender<
+        std::result::Result<[u8; mem::size_of::<Message>()], anyhow::Error>,
+    >,
 ) -> Result<()> {
     crate::timer!("main");
 
     // Input function used for emulating I/O port reads.
-    let input = move |size| -> Result<u32> {
-        const EOF: u8 = 1 << 7;
+    let input = move |vm: &Rc<RefCell<VirtualMemory>>, data, size| -> Result<()> {
         // Check for invalid operand size.
-        if size < 2 {
+        if size != 4 {
             let reason: String = format!("invalid operand size (size={:?})", size);
             error!("input(): {}", reason);
             anyhow::bail!(reason);
         }
 
-        let mut buf: [u8; 4] = [0; 4];
-
         match rx_channel_from_stdin.try_recv() {
             Ok(Ok(message)) => {
-                buf[0] = message;
-                buf[3] = 0;
-                return Ok(u32::from_ne_bytes(buf));
+                vm.borrow_mut().write_bytes(data as u64, &message)?;
+                return Ok(());
             },
             Ok(Err(err)) => {
                 let reason: String = format!("failed to receive message: {:?}", err);
@@ -160,8 +165,7 @@ pub fn run_vmm(
                 anyhow::bail!(reason);
             },
             Err(mpsc::TryRecvError::Empty) => {
-                buf[3] = EOF;
-                return Ok(u32::from_ne_bytes(buf));
+                return Ok(());
             },
             Err(mpsc::TryRecvError::Disconnected) => {
                 let reason: String = format!("channel has been disconnected");
@@ -175,7 +179,7 @@ pub fn run_vmm(
     let mut file_writer: Box<dyn Write> = get_vm_stderr_writer(args.take_vm_stderr())?;
 
     // Output function used for emulating I/O port writes.
-    let output = move |data, size| -> Result<()> {
+    let output = move |vm: &Rc<RefCell<VirtualMemory>>, data, size| -> Result<()> {
         // Parse operand size do determine how to handle the operation.
         if size == 1 {
             // Write to the standard error device.
@@ -199,7 +203,10 @@ pub fn run_vmm(
             Ok(())
         } else {
             // Write to the standard output device.
-            tx_channel_to_stdout.send(Ok(data as u8))?;
+            let mut bytes: [u8; mem::size_of::<Message>()] = [0; mem::size_of::<Message>()];
+            vm.borrow_mut().read_bytes(data as u64, &mut bytes)?;
+
+            tx_channel_to_stdout.send(Ok(bytes))?;
             Ok(())
         }
     };

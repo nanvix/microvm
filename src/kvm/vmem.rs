@@ -182,6 +182,65 @@ impl VirtualMemory {
 
         Ok((config::INITRD_BASE as u64, initrd.size()))
     }
+
+    ///
+    /// # Description
+    ///
+    /// Writes bytes into the virtual memory.
+    ///
+    /// # Parameters
+    ///
+    /// - `addr`: Address in the virtual memory.
+    /// - `data`: Data to write.
+    ///
+    /// # Returns
+    ///
+    /// Upon successful completion, this method returns empty. Otherwise, it returns an error.
+    ///
+    pub fn write_bytes(&mut self, addr: u64, data: &[u8]) -> Result<()> {
+        // Check if region lies within the virtual memory.
+        if addr as usize + data.len() > self.size {
+            let reason: String = format!("invalid memory access (addr={:#010x})", addr);
+            error!("write_bytes(): {}", reason);
+            return Err(anyhow::anyhow!(reason));
+        }
+
+        unsafe {
+            ptr::copy_nonoverlapping(data.as_ptr(), self.ptr.offset(addr as isize), data.len());
+        }
+
+        Ok(())
+    }
+
+    ///
+    /// # Description
+    ///
+    /// Reads bytes from the virtual memory.
+    ///
+    /// # Parameters
+    ///
+    /// - `addr`: Address in the virtual memory.
+    /// - `data`: Data to read.
+    /// - `data`: Data to read.
+    ///
+    /// # Returns
+    ///
+    /// Upon successful completion, this method returns empty. Otherwise, it returns an error.
+    ///
+    pub fn read_bytes(&self, addr: u64, data: &mut [u8]) -> Result<()> {
+        // Check if region lies within the virtual memory.
+        if addr as usize + data.len() > self.size {
+            let reason: String = format!("invalid memory access (addr={:#010x})", addr);
+            error!("read_bytes(): {}", reason);
+            return Err(anyhow::anyhow!(reason));
+        }
+
+        unsafe {
+            ptr::copy_nonoverlapping(self.ptr.offset(addr as isize), data.as_mut_ptr(), data.len());
+        }
+
+        Ok(())
+    }
 }
 
 impl Drop for VirtualMemory {

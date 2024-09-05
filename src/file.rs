@@ -28,8 +28,12 @@ use ::sys::ipc::Message;
 pub fn file_server(
     vm_stdin: Option<String>,
     vm_stdout: Option<String>,
-    tx_channel_to_vm: mpsc::Sender<std::result::Result<u8, anyhow::Error>>,
-    rx_channel_from_vm: mpsc::Receiver<std::result::Result<u8, anyhow::Error>>,
+    tx_channel_to_vm: mpsc::Sender<
+        std::result::Result<[u8; mem::size_of::<Message>()], anyhow::Error>,
+    >,
+    rx_channel_from_vm: mpsc::Receiver<
+        std::result::Result<[u8; mem::size_of::<Message>()], anyhow::Error>,
+    >,
 ) -> Result<()> {
     // Obtain a buffered writer for the virtual machine's standard output device.
     let mut file_writer: BufWriter<Box<dyn Write>> = get_vm_stdout_writer(vm_stdout)?;
@@ -61,16 +65,10 @@ pub fn file_server(
         }
 
         // Send message to virtual machine.
-        let bytes: [u8; mem::size_of::<Message>()] = message.to_bytes();
-        for b in bytes {
-            tx_channel_to_vm.send(Ok(b))?;
-        }
+        tx_channel_to_vm.send(Ok(message.to_bytes()))?;
 
         // Receive a message from the virtual machine.
-        let mut bytes: [u8; mem::size_of::<Message>()] = [0; mem::size_of::<Message>()];
-        for b in &mut bytes {
-            *b = rx_channel_from_vm.recv()??;
-        }
+        let bytes: [u8; mem::size_of::<Message>()] = rx_channel_from_vm.recv()??;
 
         // Parse message.
         let message: Message = match Message::try_from_bytes(bytes) {

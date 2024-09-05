@@ -44,7 +44,7 @@ pub struct MicroVm {
     // Virtual partition that hosts the virtual machine.
     _partition: Rc<RefCell<VirtualPartition>>,
     // Virtual memory of the virtual machine.
-    vmem: VirtualMemory,
+    vmem: Rc<RefCell<VirtualMemory>>,
     // Virtual processor of the virtual machine.
     vcpu: VirtualProcessor,
     // Emulator of the virtual machine.
@@ -83,8 +83,8 @@ impl MicroVm {
     ///
     pub fn new(
         memory_size: usize,
-        input: Box<dyn FnMut(usize) -> Result<u32>>,
-        output: Box<dyn FnMut(u32, usize) -> Result<()>>,
+        input: Box<dyn FnMut(&Rc<RefCell<VirtualMemory>>, u32, usize) -> Result<()>>,
+        output: Box<dyn FnMut(&Rc<RefCell<VirtualMemory>>, u32, usize) -> Result<()>>,
     ) -> Result<Self> {
         trace!("new(): memory_size={}", memory_size);
         crate::timer!("vm_creation");
@@ -92,11 +92,12 @@ impl MicroVm {
         let partition: Rc<RefCell<VirtualPartition>> =
             Rc::new(RefCell::new((VirtualPartition::new())?));
 
-        let vmem: VirtualMemory = VirtualMemory::new(partition.clone(), memory_size)?;
+        let vmem: Rc<RefCell<VirtualMemory>> =
+            Rc::new(RefCell::new(VirtualMemory::new(partition.clone(), memory_size)?));
 
         let vcpu: VirtualProcessor = VirtualProcessor::new(partition.clone(), 0)?;
 
-        let emulator: Emulator = Emulator::new(input, output)?;
+        let emulator: Emulator = Emulator::new(vmem.clone(), input, output)?;
 
         Ok(Self {
             _partition: partition,
@@ -124,7 +125,7 @@ impl MicroVm {
     pub fn load_kernel(&mut self, kernel_filename: &str) -> Result<u64> {
         trace!("load_kernel(): {}", kernel_filename);
         crate::timer!("vm_load_kernel");
-        let entry: u64 = self.vmem.load_kernel(kernel_filename)?;
+        let entry: u64 = self.vmem.borrow_mut().load_kernel(kernel_filename)?;
         Ok(entry)
     }
 
@@ -144,7 +145,7 @@ impl MicroVm {
     pub fn load_initrd(&mut self, initrd_filename: &str) -> Result<()> {
         trace!("load_initrd(): {}", initrd_filename);
         crate::timer!("vm_load_initrd");
-        let initrd: (u64, usize) = self.vmem.load_initrd(initrd_filename)?;
+        let initrd: (u64, usize) = self.vmem.borrow_mut().load_initrd(initrd_filename)?;
         self.initrd = Some(initrd);
         Ok(())
     }

@@ -23,7 +23,7 @@ pub const INITRD_BASE: usize = 0x00800000;
 pub const STDOUT_PORT: u16 = 0xe9;
 
 /// I/O port that is connected to the standard input of the virtual machine.
-pub const STDIN_PORT: u16 = 0xe9;
+pub const STDIN_PORT: u16 = 0xea;
 
 /// I/O port that enables the guest to invoke functionalities of the virtual machine monitor.
 pub const VMM_PORT: u16 = 0x604;
