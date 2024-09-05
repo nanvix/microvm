@@ -41,6 +41,8 @@ pub struct Args {
     vm_stdin: Option<String>,
     /// Standard error.
     vm_stderr: Option<String>,
+    /// HTTP server address.
+    sockaddr: Option<String>,
 }
 
 //==================================================================================================
@@ -50,6 +52,8 @@ pub struct Args {
 impl Args {
     /// Command-line option for printing the help message.
     const OPT_HELP: &'static str = "-help";
+    /// Command-line for HTTP.
+    const OPT_HTTP: &'static str = "-http";
     /// Command-line option for initrd file.
     const OPT_INITRD: &'static str = "-initrd";
     /// Command-line option for the kernel file.
@@ -82,6 +86,7 @@ impl Args {
         let mut vm_stderr: Option<String> = None;
         let mut vm_stdin: Option<String> = None;
         let mut vm_stdout: Option<String> = None;
+        let mut sockaddr: Option<String> = None;
 
         // Parse command-line arguments.
         let mut i: usize = 1;
@@ -91,6 +96,11 @@ impl Args {
                 Self::OPT_HELP => {
                     Self::usage();
                     process::exit(0);
+                },
+                // Set HTTP server.
+                Self::OPT_HTTP if i + 1 < args.len() => {
+                    sockaddr = Some(args[i + 1].clone());
+                    i += 1;
                 },
                 // Set initrd file.
                 Self::OPT_INITRD if i + 1 < args.len() => {
@@ -170,6 +180,12 @@ impl Args {
             anyhow::bail!("kernel file is missing");
         }
 
+        // Check if mutually exclusive options are set.
+        if sockaddr.is_some() && (vm_stdin.is_some() || vm_stdout.is_some()) {
+            Self::usage();
+            anyhow::bail!("-http is mutually exclusive with -stdin and -stdout");
+        }
+
         // Check if memory size is invalid.
         if memory_size == 0 {
             Self::usage();
@@ -183,6 +199,7 @@ impl Args {
             vm_stderr,
             vm_stdin,
             vm_stdout,
+            sockaddr,
         })
     }
 
@@ -193,7 +210,8 @@ impl Args {
     ///
     pub fn usage() {
         eprintln!(
-            "Usage: {} {} <kernel> [{} <size>] [{} <file>] [{} <file>] [{} <file>] [{} <file>]",
+            "Usage: {} {} <kernel> [{} <size>] [{} <file>] [{} <file>] [{} <file>] [{} <file>] [ \
+             {} <socket-address>]",
             env::args()
                 .next()
                 .unwrap_or(config::PROGRAM_NAME.to_string()),
@@ -203,6 +221,7 @@ impl Args {
             Self::OPT_STDERR,
             Self::OPT_STDIN,
             Self::OPT_STDOUT,
+            Self::OPT_HTTP
         );
     }
 
@@ -287,5 +306,19 @@ impl Args {
     ///
     pub fn take_vm_stdout(&mut self) -> Option<String> {
         self.vm_stdout.take()
+    }
+
+    ///
+    /// # Description
+    ///
+    /// Returns the HTTP server address that was passed as a command-line argument to the program.
+    ///
+    /// # Returns
+    ///
+    /// The HTTP server address that was passed as a command-line argument to the program. If no
+    /// HTTP server address was passed, this method returns `None`.
+    ///
+    pub fn take_sockaddr(&mut self) -> Option<String> {
+        self.sockaddr.take()
     }
 }

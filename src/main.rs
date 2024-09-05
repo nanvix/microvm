@@ -41,6 +41,7 @@ mod args;
 mod config;
 mod elf;
 mod file;
+mod http;
 mod logging;
 mod microvm;
 mod pal;
@@ -76,6 +77,7 @@ use ::std::{
     fs::File,
     io::Write,
     mem,
+    net::SocketAddr,
     rc::Rc,
     sync::mpsc,
     thread::{
@@ -109,7 +111,16 @@ fn main() -> Result<()> {
     ) = mpsc::channel::<Result<[u8; mem::size_of::<Message>()]>>();
 
     // Spawn I/O thread.
-    let _io_thread: JoinHandle<()> = {
+    let _io_thread: JoinHandle<()> = if let Some(sockaddr) = args.take_sockaddr() {
+        let sockaddr: SocketAddr = sockaddr.parse()?;
+        thread::spawn(move || {
+            let server = http::HttpServer::new(sockaddr, tx_channel_to_vm, rx_channel_from_vm);
+
+            if let Err(e) = server.run() {
+                error!("http server has failed: {:?}", e);
+            }
+        })
+    } else {
         let vm_stdin: Option<String> = args.take_vm_stdin();
         let vm_stdout: Option<String> = args.take_vm_stdout();
         thread::spawn(move || {
@@ -122,6 +133,12 @@ fn main() -> Result<()> {
     };
 
     run_vmm(args, rx_channel_from_stdin, tx_channel_to_stdout)?;
+
+    // Wait for the I/O thread to finish.
+    if let Err(e) = _io_thread.join() {
+        error!("failed to join I/O thread: {:?}", e);
+    }
+    info!("I/O thread has finished execution.");
 
     Ok(())
 }
