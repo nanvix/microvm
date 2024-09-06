@@ -134,12 +134,6 @@ fn main() -> Result<()> {
 
     run_vmm(args, rx_channel_from_stdin, tx_channel_to_stdout)?;
 
-    // Wait for the I/O thread to finish.
-    if let Err(e) = _io_thread.join() {
-        error!("failed to join I/O thread: {:?}", e);
-    }
-    info!("I/O thread has finished execution.");
-
     Ok(())
 }
 
