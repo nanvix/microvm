@@ -162,7 +162,10 @@ impl Profiler {
             .sum();
         let thread_id: thread::ThreadId = thread::current().id();
 
-        writeln!(out, "call_depth,thread_id,function_name,num_calls,percent_time,microsecs_per_call")?;
+        writeln!(
+            out,
+            "call_depth,thread_id,function_name,num_calls,percent_time,microsecs_per_call"
+        )?;
         for root in self.roots.iter() {
             root.borrow()
                 .write_recursive(out, thread_id, total_duration, 0, max_depth)?;
@@ -194,7 +197,7 @@ impl Profiler {
 
 impl Drop for Profiler {
     fn drop(&mut self) {
-        if let Err(e) = self.write(&mut std::io::stdout(), None) {
+        if let Err(e) = self.write(&mut std::io::stderr(), None) {
             log::error!("Failed to write profile data (error={})", e);
         }
     }

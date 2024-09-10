@@ -47,6 +47,14 @@ impl VirtualPartition {
         let kvm: Kvm = Kvm::new()?;
         let vm: VmFd = kvm.create_vm()?;
 
+        // Check if the KVM supports the required features.
+        let has_sync_mmu_support: bool = kvm.check_extension(kvm_ioctls::Cap::SyncMmu);
+        if !has_sync_mmu_support {
+            let reason: &str = "sync mmu is not supported";
+            error!("new(): {}", reason);
+            anyhow::bail!(reason);
+        }
+
         Ok(Self { _kvm: kvm, vm })
     }
 

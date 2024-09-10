@@ -12,14 +12,8 @@ use ::std::{
         self,
         Debug,
     },
-    future::Future,
     io,
-    pin::Pin,
     rc::Rc,
-    task::{
-        Context,
-        Poll,
-    },
     thread,
     time::Instant,
 };
@@ -50,12 +44,6 @@ pub struct Scope {
 /// A guard that is created when entering a scope and dropped when leaving it.
 pub struct Guard {
     enter_time: Instant,
-}
-
-/// A scope over an async block that may yield and re-enter several times.
-pub struct AsyncScope<'a, F: Future> {
-    scope: Rc<RefCell<Scope>>,
-    future: Pin<&'a mut F>,
 }
 
 //======================================================================================================================
@@ -172,17 +160,6 @@ impl Guard {
 impl Debug for Scope {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.name)
-    }
-}
-
-impl<'a, F: Future> Future for AsyncScope<'a, F> {
-    type Output = F::Output;
-
-    fn poll(self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Self::Output> {
-        let self_: &mut Self = self.get_mut();
-
-        let _guard = PROFILER.with(|p| p.borrow_mut().enter_scope(self_.scope.clone()));
-        Future::poll(self_.future.as_mut(), ctx)
     }
 }
 

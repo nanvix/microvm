@@ -6,10 +6,17 @@
 //==================================================================================================
 
 use crate::{
-    kvm::vcpu::VirtualProcessorExitContext,
+    kvm::{
+        vcpu::VirtualProcessorExitContext,
+        vmem::VirtualMemory,
+    },
     microvm::MicroVm,
 };
 use ::anyhow::Result;
+use ::std::{
+    cell::RefCell,
+    rc::Rc,
+};
 
 //==================================================================================================
 // Structures
@@ -21,10 +28,11 @@ use ::anyhow::Result;
 /// A structure that represents an instruction emulator for the virtual machine.
 ///
 pub struct Emulator {
+    vmem: Rc<RefCell<VirtualMemory>>,
     /// Input function used for emulating I/O port reads.
-    input: Box<dyn FnMut(usize) -> Result<u32>>,
+    input: Box<dyn FnMut(&Rc<RefCell<VirtualMemory>>, u32, usize) -> Result<()>>,
     /// Output function used for emulating I/O port writes.
-    output: Box<dyn FnMut(u32, usize) -> Result<()>>,
+    output: Box<dyn FnMut(&Rc<RefCell<VirtualMemory>>, u32, usize) -> Result<()>>,
 }
 
 //==================================================================================================
@@ -48,11 +56,16 @@ impl Emulator {
     /// error.
     ///
     pub fn new(
-        input: Box<dyn FnMut(usize) -> Result<u32>>,
-        output: Box<dyn FnMut(u32, usize) -> Result<()>>,
+        vmem: Rc<RefCell<VirtualMemory>>,
+        input: Box<dyn FnMut(&Rc<RefCell<VirtualMemory>>, u32, usize) -> Result<()>>,
+        output: Box<dyn FnMut(&Rc<RefCell<VirtualMemory>>, u32, usize) -> Result<()>>,
     ) -> Result<Self> {
         trace!("new()");
-        Ok(Self { input, output })
+        Ok(Self {
+            vmem,
+            input,
+            output,
+        })
     }
 
     ///
@@ -78,27 +91,21 @@ impl Emulator {
         // Parse context.
         match exit_context {
             // Read from an I/O port.
-            VirtualProcessorExitContext::PmioIn(port, data) => match port {
-                // Read from standard input.
-                MicroVm::STDIN_PORT => {
-                    let value: u32 = (self.input)(data.len())?;
-                    for i in 0..data.len() {
-                        data[i] = ((value >> (i * 8)) & 0xff) as u8;
-                    }
-                },
+            VirtualProcessorExitContext::PmioIn(port, _data) => {
                 // Read from an I/O port that is not supported.
-                _ => {
-                    let reason: String =
-                        format!("read from unsupported port i/o (port={:#06x})", port);
-                    error!("handle_pmio_access(): {}", reason);
-                    anyhow::bail!(reason);
-                },
+                let reason: String = format!("read from unsupported port i/o (port={:#06x})", port);
+                error!("handle_pmio_access(): {}", reason);
+                anyhow::bail!(reason);
             },
             // Write to an I/O port.
             VirtualProcessorExitContext::PmioOut(port, data, size) => match port {
                 // Write to standard output.
                 MicroVm::STDOUT_PORT => {
-                    (self.output)(data, size)?;
+                    (self.output)(&self.vmem, data, size)?;
+                },
+                // Read from standard input.
+                MicroVm::STDIN_PORT => {
+                    (self.input)(&self.vmem, data, size)?;
                 },
                 // Write to the virtual machine monitor port.
                 MicroVm::VMM_PORT => {

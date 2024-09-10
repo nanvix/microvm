@@ -146,7 +146,7 @@ impl VirtualProcessor {
                 warn!("run(): mmio read (addr={:#010x}, data.len={})", addr, data.len());
                 Ok(VirtualProcessorExitContext::Unknown)
             },
-            // Write to an MMIO region.
+            // Write to a MMIO region.
             VcpuExit::MmioWrite(addr, data) => {
                 // TODO: handle MMIO write.
                 warn!("run(): mmio write (addr={:#010x}, data.len={})", addr, data.len());
@@ -158,7 +158,7 @@ impl VirtualProcessor {
                 warn!("run(): exception");
                 Ok(VirtualProcessorExitContext::Unknown)
             },
-            // Hypercall invoked.
+            // Hypervisor call invoked.
             VcpuExit::Hypercall(_) => {
                 // TODO: handle hypercall.
                 warn!("run(): hypercall");
