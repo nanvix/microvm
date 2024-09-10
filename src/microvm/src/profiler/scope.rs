@@ -101,7 +101,6 @@ impl Scope {
     pub fn write_recursive<W: io::Write>(
         &self,
         out: &mut W,
-        thread_id: thread::ThreadId,
         total_duration: u128,
         depth: usize,
         max_depth: Option<usize>,
@@ -128,7 +127,7 @@ impl Scope {
         writeln!(
             out,
             "{},{},{:.2},{:.2}",
-            format!("{},{:?},{}", markers, thread_id, self.name),
+            format!("{},{}", markers, self.name),
             self.num_calls,
             percent_time,
             duration_sum_secs / (self.num_calls as f64),
@@ -137,7 +136,7 @@ impl Scope {
         // Write children
         for succ in &self.succs {
             succ.borrow()
-                .write_recursive(out, thread_id, total_duration, depth + 1, max_depth)?;
+                .write_recursive(out, total_duration, depth + 1, max_depth)?;
         }
 
         Ok(())

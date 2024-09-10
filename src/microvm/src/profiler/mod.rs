@@ -164,11 +164,11 @@ impl Profiler {
 
         writeln!(
             out,
-            "call_depth,thread_id,function_name,num_calls,percent_time,microsecs_per_call"
+            "call_depth,function_name,num_calls,percent_time,microsecs_per_call"
         )?;
         for root in self.roots.iter() {
             root.borrow()
-                .write_recursive(out, thread_id, total_duration, 0, max_depth)?;
+                .write_recursive(out, total_duration, 0, max_depth)?;
         }
 
         out.flush()

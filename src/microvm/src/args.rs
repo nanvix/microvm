@@ -35,12 +35,10 @@ pub struct Args {
     initrd_filename: Option<String>,
     /// Memory size.
     memory_size: usize,
-    /// Standard output.
-    vm_stdout: Option<String>,
-    /// Standard input.
-    vm_stdin: Option<String>,
     /// Standard error.
     vm_stderr: Option<String>,
+    /// HTTP server address.
+    sockaddr: String,
 }
 
 //==================================================================================================
@@ -50,6 +48,8 @@ pub struct Args {
 impl Args {
     /// Command-line option for printing the help message.
     const OPT_HELP: &'static str = "-help";
+    /// Command-line for HTTP.
+    const OPT_HTTP: &'static str = "-http";
     /// Command-line option for initrd file.
     const OPT_INITRD: &'static str = "-initrd";
     /// Command-line option for the kernel file.
@@ -58,10 +58,6 @@ impl Args {
     const OPT_MEMORY_SIZE: &'static str = "-memory";
     /// Command-line option for the standard error.
     const OPT_STDERR: &'static str = "-stderr";
-    /// Command-line option for the standard input.
-    const OPT_STDIN: &'static str = "-stdin";
-    /// Command-line option for the standard output.
-    const OPT_STDOUT: &'static str = "-stdout";
 
     ///
     /// # Description
@@ -80,8 +76,7 @@ impl Args {
         let mut initrd_filename: Option<String> = None;
         let mut memory_size: usize = config::DEFAULT_MEMORY_SIZE;
         let mut vm_stderr: Option<String> = None;
-        let mut vm_stdin: Option<String> = None;
-        let mut vm_stdout: Option<String> = None;
+        let mut sockaddr: String = config::DEFAULT_HTTP_SOCKADDR.to_string();
 
         // Parse command-line arguments.
         let mut i: usize = 1;
@@ -91,6 +86,11 @@ impl Args {
                 Self::OPT_HELP => {
                     Self::usage();
                     process::exit(0);
+                },
+                // Set HTTP server.
+                Self::OPT_HTTP if i + 1 < args.len() => {
+                    sockaddr = args[i + 1].clone();
+                    i += 1;
                 },
                 // Set initrd file.
                 Self::OPT_INITRD if i + 1 < args.len() => {
@@ -142,16 +142,7 @@ impl Args {
                     vm_stderr = Some(args[i + 1].clone());
                     i += 1;
                 },
-                // Set input file.
-                Self::OPT_STDIN if i + 1 < args.len() => {
-                    vm_stdin = Some(args[i + 1].clone());
-                    i += 1;
-                },
-                // Set output file.
-                Self::OPT_STDOUT if i + 1 < args.len() => {
-                    vm_stdout = Some(args[i + 1].clone());
-                    i += 1;
-                },
+
                 // Invalid argument.
                 _ => {
                     Self::usage();
@@ -181,8 +172,7 @@ impl Args {
             initrd_filename,
             memory_size,
             vm_stderr,
-            vm_stdin,
-            vm_stdout,
+            sockaddr,
         })
     }
 
@@ -193,7 +183,7 @@ impl Args {
     ///
     pub fn usage() {
         eprintln!(
-            "Usage: {} {} <kernel> [{} <size>] [{} <file>] [{} <file>] [{} <file>] [{} <file>]",
+            "Usage: {} {} <kernel> [{} <size>] [{} <file>] [{} <file>]  [{} <socket-address>]",
             env::args()
                 .next()
                 .unwrap_or(config::PROGRAM_NAME.to_string()),
@@ -201,8 +191,7 @@ impl Args {
             Self::OPT_MEMORY_SIZE,
             Self::OPT_INITRD,
             Self::OPT_STDERR,
-            Self::OPT_STDIN,
-            Self::OPT_STDOUT,
+            Self::OPT_HTTP
         );
     }
 
@@ -216,8 +205,8 @@ impl Args {
     /// The initrd filename that was passed as a command-line argument to the program. If no initrd
     /// filename was passed, this method returns `None`.
     ///
-    pub fn initrd_filename(&self) -> Option<&str> {
-        self.initrd_filename.as_deref()
+    pub fn initrd_filename(&mut self) -> Option<String> {
+        self.initrd_filename.take()
     }
 
     ///
@@ -264,28 +253,13 @@ impl Args {
     ///
     /// # Description
     ///
-    /// Returns the name of the  input file that was passed as a command-line argument to the program.
+    /// Returns the HTTP server address that was passed as a command-line argument to the program.
     ///
     /// # Returns
     ///
-    /// The name of input file that was passed as a command-line argument to the program. If no
-    /// input file was passed, or this option was already taken, this method returns `None`.
+    /// The HTTP server address that was passed as a command-line argument to the program.
     ///
-    pub fn take_vm_stdin(&mut self) -> Option<String> {
-        self.vm_stdin.take()
-    }
-
-    ///
-    /// # Description
-    ///
-    /// Returns the name of the output file file that was passed as a command-line argument to the program.
-    ///
-    /// # Returns
-    ///
-    /// The name of output file that was passed as a command-line argument to the program. If no
-    /// output file was passed, or this option was already taken, this method returns `None`.
-    ///
-    pub fn take_vm_stdout(&mut self) -> Option<String> {
-        self.vm_stdout.take()
+    pub fn sockaddr(&mut self) -> &str {
+        &self.sockaddr
     }
 }
