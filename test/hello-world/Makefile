@@ -15,7 +15,7 @@ ASM_SRC=$(wildcard *.S)
 OBJ = $(ASM_SRC:.S=.o) \
 	  $(C_SRC:.c=.o)   \
 
-BIN=hello-world.elf
+BIN=hello-world.$(EXE_SUFFIX)
 
 #===================================================================================================
 # Toolchain Configuration
