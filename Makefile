@@ -37,6 +37,7 @@ endif
 
 # Binary file
 export BIN := microvm
+export EXE_SUFFIX := elf
 
 #===================================================================================================
 # Build Targets
@@ -56,14 +57,14 @@ clean: clean-tests clean-microvm
 all-microvm:
 	$(CARGO) build --all $(CARGO_FLAGS) $(CARGO_FEATURES)
 ifeq ($(RELEASE),no)
-	cp -f --preserve target/debug/$(BIN) $(BINARIES_DIR)/$(BIN)
+	cp -f --preserve target/debug/$(BIN) $(BINARIES_DIR)/$(BIN).$(EXE_SUFFIX)
 else
-	cp -f --preserve target/release/$(BIN) $(BINARIES_DIR)/$(BIN)
+	cp -f --preserve target/release/$(BIN) $(BINARIES_DIR)/$(BIN).$(EXE_SUFFIX)
 endif
 
 # Cleans microvm build
 clean-microvm:
-	rm -f $(BINARIES_DIR)/$(BIN)
+	rm -f $(BINARIES_DIR)/$(BIN).$(EXE_SUFFIX)
 	$(CARGO) clean
 	rm -rf Cargo.lock target
 
@@ -77,12 +78,12 @@ clean-tests:
 
 # Runs tests.
 run: all
-	$(CARGO) run $(CARGO_FLAGS) $(CARGO_FEATURES) -- -kernel $(BINARIES_DIR)/hello-world.elf
+	$(CARGO) run $(CARGO_FLAGS) $(CARGO_FEATURES) -- -kernel $(BINARIES_DIR)/hello-world.$(EXE_SUFFIX)
 
 install: all-microvm
 	mkdir -p $(INSTALL_DIR)
 ifeq ($(RELEASE),no)
-	cp -f --preserve target/debug/$(BIN) $(INSTALL_DIR)/$(BIN)
+	cp -f --preserve target/debug/$(BIN) $(INSTALL_DIR)/$(BIN).$(EXE_SUFFIX)
 else
-	cp -f --preserve target/release/$(BIN) $(INSTALL_DIR)/$(BIN)
+	cp -f --preserve target/release/$(BIN) $(INSTALL_DIR)/$(BIN).$(EXE_SUFFIX)
 endif

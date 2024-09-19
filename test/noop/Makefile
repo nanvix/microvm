@@ -15,7 +15,7 @@ ASM_SRC=$(wildcard *.S)
 OBJ = $(ASM_SRC:.S=.o) \
 	  $(C_SRC:.c=.o)   \
 
-BIN=noop.elf
+BIN=noop.$(EXE_SUFFIX)
 
 #===================================================================================================
 # Toolchain Configuration
