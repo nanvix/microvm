@@ -7,7 +7,7 @@ resolver = "2"
 
 
 [workspace.dependencies]
-anyhow = "1.0.86"
+anyhow = "1.0.89"
 flexi_logger = "0.28.5"
 log = "0.4.22"
 serde = { version = "1.0", features = ["derive"] }
