@@ -15,5 +15,5 @@ serde_json = { workspace = true }
 sys = { workspace = true }
 hyper = { version = "1.4.1", features = ["full"] }
 tokio = { workspace = true }
-http-body-util = "0.1"
+http-body-util = "0.1.2"
 hyper-util = { version = "0.1", features = ["full"] }
