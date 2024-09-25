@@ -5,12 +5,16 @@
 members = ["src/*"]
 resolver = "2"
 
+[workspace.package]
+authors = ["The Maintainers of Nanvix"]
+version = "0.5.1"
+edition = "2021"
 
 [workspace.dependencies]
-anyhow = "1.0.86"
-flexi_logger = "0.28.5"
+anyhow = "1.0.89"
+flexi_logger = "0.29.0"
 log = "0.4.22"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-sys = { git = "https://github.com/nanvix/sys", branch = "releases/v1.4.0" }
-tokio = { version = "1", features = ["full"] }
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = "1.0.128"
+kernel = { git = "https://github.com/nanvix/kernel", branch = "releases/v0.7.1", default-features = false }
+tokio = { version = "1.40.0", features = ["full"] }

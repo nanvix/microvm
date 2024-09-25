@@ -3,8 +3,9 @@
 
 [package]
 name = "gateway"
-version = "0.1.0"
-edition = "2021"
+authors = { workspace = true }
+version = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
@@ -12,8 +13,8 @@ flexi_logger = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sys  = { workspace = true }
-hyper = { version = "1", features = ["full"] }
+kernel = { workspace = true }
+hyper = { version = "1.4.1", features = ["full"] }
 tokio = { workspace = true }
-http-body-util = "0.1"
-hyper-util = { version = "0.1", features = ["full"] }
+http-body-util = "0.1.2"
+hyper-util = { version = "0.1.9", features = ["full"] }
