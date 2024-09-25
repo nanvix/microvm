@@ -5,6 +5,10 @@
 members = ["src/*"]
 resolver = "2"
 
+[workspace.package]
+authors = ["The Maintainers of Nanvix"]
+version = "0.5.1"
+edition = "2021"
 
 [workspace.dependencies]
 anyhow = "1.0.89"
