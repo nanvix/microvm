@@ -26,9 +26,26 @@ jobs:
           rm -rf microvm-release
           git clone --recursive https://github.com/nanvix/microvm.git --branch ${TARGET_BRANCH} microvm-release
 
+  lint:
+    name: Lint
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+    - name: Clippy
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.hostname }}
+        username: ${{ secrets.username }}
+        key: ${{ secrets.sshkey }}
+        port: ${{ secrets.portnum }}
+        script: |
+          source "$HOME/.cargo/env"
+          cd microvm-release
+          make clippy
+
   build:
     name: Build
-    needs: setup
+    needs: lint
     runs-on: ubuntu-latest
     steps:
     - name: Build

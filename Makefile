@@ -53,6 +53,10 @@ make-dirs:
 # Cleans everything.
 clean: clean-tests clean-microvm
 
+# Runs clippy.
+clippy:
+	$(CARGO) clippy $(CARGO_FLAGS) $(CARGO_FEATURES) -- -D warnings
+
 # Builds microvm.
 all-microvm:
 	$(CARGO) build --all $(CARGO_FLAGS) $(CARGO_FEATURES)

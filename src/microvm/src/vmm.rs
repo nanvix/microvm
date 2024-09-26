@@ -49,6 +49,8 @@ pub struct Vmm {
     microvm: MicroVm,
 }
 
+type MessageQueue = Rc<RefCell<VecDeque<Sender<Result<Message, anyhow::Error>>>>>;
+
 //==================================================================================================
 // Implementations
 //==================================================================================================
@@ -73,8 +75,7 @@ impl Vmm {
             }
         });
 
-        let queue: Rc<RefCell<VecDeque<Sender<Result<Message, anyhow::Error>>>>> =
-            Rc::new(RefCell::new(VecDeque::new()));
+        let queue: MessageQueue = Rc::new(RefCell::new(VecDeque::new()));
 
         // Input function used for emulating I/O port reads.
         let input: Box<microvm::InputFn> = Self::build_input_fn(queue.clone(), sender);
@@ -132,6 +133,7 @@ impl Vmm {
                 .read(false)
                 .write(true)
                 .create(true)
+                .truncate(true)
                 .open(&vm_stderr)?;
             Box::new(file)
         } else {
@@ -142,7 +144,7 @@ impl Vmm {
     }
 
     fn build_input_fn(
-        input_queue: Rc<RefCell<VecDeque<Sender<Result<Message, anyhow::Error>>>>>,
+        input_queue: MessageQueue,
         mut sender: GatewaySender,
     ) -> Box<microvm::InputFn> {
         // Input function used for emulating I/O port reads.
@@ -165,7 +167,7 @@ impl Vmm {
                 Err(tokio::sync::mpsc::error::TryRecvError::Empty) => return Ok(()),
                 // Channel has disconnected.
                 Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
-                    let reason: String = format!("channel has been disconnected");
+                    let reason: String = "channel has been disconnected".to_string();
                     error!("input(): {}", reason);
                     anyhow::bail!(reason);
                 },
@@ -179,7 +181,7 @@ impl Vmm {
 
     fn build_output_fn(
         mut file_writer: Box<dyn Write>,
-        queue: Rc<RefCell<VecDeque<Sender<Result<Message, anyhow::Error>>>>>,
+        queue: MessageQueue,
     ) -> Box<microvm::OutputFn> {
         // Output function used for emulating I/O port writes.
         let output = move |vm: &Rc<RefCell<VirtualMemory>>, data, size| -> Result<()> {
@@ -201,7 +203,7 @@ impl Vmm {
 
                 let buf: &[u8] = &[ch as u8];
 
-                file_writer.write(buf)?;
+                file_writer.write_all(buf)?;
 
                 Ok(())
             } else {

@@ -80,8 +80,8 @@ impl VirtualMemory {
         };
 
         // Check if we failed to allocate memory for the virtual machine.
-        if ptr == ptr::null_mut() {
-            let reason: String = format!("failed to allocate memory for the virtual machine");
+        if ptr.is_null() {
+            let reason: String = "failed to allocate memory for the virtual machine".to_string();
             error!("new(): {} (memory_size={:?})", reason, memory_size);
             return Err(anyhow::anyhow!(reason));
         }
@@ -164,7 +164,7 @@ impl VirtualMemory {
         // Check if initrd would overlap with kernel.
         if let Some((kernel_base, kernel_size)) = self.kernel {
             if (initrd.ptr() as usize) < (kernel_base as usize + kernel_size) {
-                let reason: String = format!("initrd overlaps with kernel");
+                let reason: String = "initrd overlaps with kernel".to_string();
                 error!("load_initrd(): {}", reason);
                 return Err(anyhow::anyhow!(reason));
             }
@@ -172,8 +172,8 @@ impl VirtualMemory {
 
         unsafe {
             ptr::copy_nonoverlapping(
-                initrd.ptr() as *const u8,
-                self.ptr.offset(config::INITRD_BASE as isize),
+                initrd.ptr(),
+                self.ptr.add(config::INITRD_BASE),
                 initrd.size(),
             );
         }

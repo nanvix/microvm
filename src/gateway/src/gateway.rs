@@ -5,7 +5,10 @@
 // Imports
 //==================================================================================================
 
-use ::anyhow::Result;
+use ::anyhow::{
+    anyhow,
+    Result,
+};
 use ::http_body_util::{
     BodyExt,
     Full,
@@ -19,8 +22,11 @@ use ::hyper::{
     service::Service,
     Request,
     Response,
+    StatusCode,
 };
 use ::hyper_util::rt::TokioIo;
+use ::serde::Deserialize;
+use ::serde_json::Value;
 use ::std::{
     future::Future,
     net::SocketAddr,
@@ -32,14 +38,13 @@ use ::tokio::{
         TcpListener,
         TcpStream,
     },
-    sync::mpsc,
-};
-use anyhow::anyhow;
-use hyper::StatusCode;
-use serde::Deserialize;
-use tokio::sync::mpsc::{
-    Receiver,
-    Sender,
+    sync::{
+        mpsc,
+        mpsc::{
+            Receiver,
+            Sender,
+        },
+    },
 };
 
 #[derive(Deserialize)]
@@ -156,11 +161,11 @@ impl GatewayReceiver {
 
     fn message_to_bytes(message: Message) -> Result<Bytes> {
         // Convert message to JSON.
-        let json = serde_json::json!({
+        let json: Value = serde_json::json!({
             "source": u32::from(message.source),
             "destination": u32::from(message.destination),
             "message_type": format!("{:?}", message.message_type),
-            "payload": message.payload.iter().copied().collect::<Vec<_>>(),
+            "payload": message.payload.to_vec(),
         });
 
         // Convert JSON to bytes.
@@ -222,7 +227,8 @@ impl Service<Request<Incoming>> for GatewayReceiver {
                 .header("Content-Type", "application/json")
                 .header("Content-Length", bytes.len())
                 .body(Full::new(bytes))
-                .map_err(|_| Self::bad_request()).map_err(|_|Self::bad_request())
+                .map_err(|_| Self::bad_request())
+                .map_err(|_| Self::bad_request())
             {
                 Ok(response) => Ok(response),
                 Err(_) => Ok(Self::bad_request()),

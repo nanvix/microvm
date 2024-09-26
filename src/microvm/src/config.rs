@@ -8,7 +8,7 @@
 //!
 
 /// Default name of the program.
-pub const PROGRAM_NAME: &'static str = "microvm";
+pub const PROGRAM_NAME: &str = "microvm";
 
 /// Default memory size.
 pub const DEFAULT_MEMORY_SIZE: usize = 128 * 1024 * 1024;
@@ -29,4 +29,4 @@ pub const STDIN_PORT: u16 = 0xea;
 pub const VMM_PORT: u16 = 0x604;
 
 /// Default socket address for the HTTP server.
-pub const DEFAULT_HTTP_SOCKADDR: &'static str = "127.0.0.1:8080";
+pub const DEFAULT_HTTP_SOCKADDR: &str = "127.0.0.1:8080";
