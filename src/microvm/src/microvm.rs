@@ -89,11 +89,7 @@ impl MicroVm {
     /// Upon successful completion, this method returns the MicroVM that was created. Otherwise, it
     /// returns an error.
     ///
-    pub fn new(
-        memory_size: usize,
-        input: Box<dyn FnMut(&Rc<RefCell<VirtualMemory>>, u32, usize) -> Result<()>>,
-        output: Box<dyn FnMut(&Rc<RefCell<VirtualMemory>>, u32, usize) -> Result<()>>,
-    ) -> Result<Self> {
+    pub fn new(memory_size: usize, input: Box<InputFn>, output: Box<OutputFn>) -> Result<Self> {
         trace!("new(): memory_size={}", memory_size);
         crate::timer!("vm_creation");
 
@@ -210,7 +206,7 @@ impl MicroVm {
                 // The guest requested to access an I/O port.
                 VirtualProcessorExitReason::PmioAccess => {
                     crate::timer!("vm_run_pmio_access");
-                    if self.emulator.handle_pmio_access(exit_context)? == false {
+                    if !(self.emulator.handle_pmio_access(exit_context)?) {
                         self.vcpu.poweroff();
                     }
                 },

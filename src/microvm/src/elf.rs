@@ -180,42 +180,42 @@ pub unsafe fn load(
         || (*ehdr).e_ident[2] != ELFMAG2 as u8
         || (*ehdr).e_ident[3] != ELFMAG3 as u8
     {
-        let reason: String = format!("header is null or invalid magic");
+        let reason: String = "header is null or invalid magic".to_string();
         error!("load(): {} (e_ident={:?})", reason, (*ehdr).e_ident);
         return Err(anyhow::anyhow!(reason));
     }
 
     // Check ELF class.
     if (*ehdr).e_ident[4] != ELFCLASS32 {
-        let reason: String = format!("invalid elf class");
+        let reason: String = "invalid elf class".to_string();
         error!("load(): {} (e_ident={:?})", reason, (*ehdr).e_ident);
         return Err(anyhow::anyhow!(reason));
     }
 
     // Check data encoding.
     if (*ehdr).e_ident[5] != ELFDATA2LSB {
-        let reason: String = format!("invalid data encoding");
+        let reason: String = "invalid data encoding".to_string();
         error!("load(): {} (e_ident={:?})", reason, (*ehdr).e_ident);
         return Err(anyhow::anyhow!(reason));
     }
 
     // Check version.
     if (*ehdr).e_version != EV_CURRENT {
-        let reason: String = format!("invalid version");
+        let reason: String = "invalid version".to_string();
         error!("load(): {} (e_version={})", reason, (*ehdr).e_version);
         return Err(anyhow::anyhow!(reason));
     }
 
     // Check ELF type.
     if (*ehdr).e_type != ET_EXEC {
-        let reason: String = format!("invalid elf type");
+        let reason: String = "invalid elf type".to_string();
         error!("load(): {} (e_type={})", reason, (*ehdr).e_type);
         return Err(anyhow::anyhow!(reason));
     }
 
     // Check ELF machine architecture.
     if (*ehdr).e_machine != EM_386 {
-        let reason: String = format!("invalid machine architecture");
+        let reason: String = "invalid machine architecture".to_string();
         error!("load(): {} (e_machine={})", reason, (*ehdr).e_machine);
         return Err(anyhow::anyhow!(reason));
     }
@@ -236,7 +236,7 @@ pub unsafe fn load(
 
             // Check if segment fits in memory.
             if vaddr + memsz > max_offset {
-                let reason: String = format!("segment does not fit in memory");
+                let reason: String = "segment does not fit in memory".to_string();
                 error!(
                     "load(): {} (vaddr={:#010x}, memsz={:#010x}, max_offset={:#010x})",
                     reason, vaddr, memsz, max_offset

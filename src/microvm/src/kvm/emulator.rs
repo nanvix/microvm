@@ -10,7 +10,11 @@ use crate::{
         vcpu::VirtualProcessorExitContext,
         vmem::VirtualMemory,
     },
-    microvm::MicroVm,
+    microvm::{
+        InputFn,
+        MicroVm,
+        OutputFn,
+    },
 };
 use ::anyhow::Result;
 use ::std::{
@@ -30,9 +34,9 @@ use ::std::{
 pub struct Emulator {
     vmem: Rc<RefCell<VirtualMemory>>,
     /// Input function used for emulating I/O port reads.
-    input: Box<dyn FnMut(&Rc<RefCell<VirtualMemory>>, u32, usize) -> Result<()>>,
+    input: Box<InputFn>,
     /// Output function used for emulating I/O port writes.
-    output: Box<dyn FnMut(&Rc<RefCell<VirtualMemory>>, u32, usize) -> Result<()>>,
+    output: Box<OutputFn>,
 }
 
 //==================================================================================================
@@ -57,8 +61,8 @@ impl Emulator {
     ///
     pub fn new(
         vmem: Rc<RefCell<VirtualMemory>>,
-        input: Box<dyn FnMut(&Rc<RefCell<VirtualMemory>>, u32, usize) -> Result<()>>,
-        output: Box<dyn FnMut(&Rc<RefCell<VirtualMemory>>, u32, usize) -> Result<()>>,
+        input: Box<InputFn>,
+        output: Box<OutputFn>,
     ) -> Result<Self> {
         trace!("new()");
         Ok(Self {

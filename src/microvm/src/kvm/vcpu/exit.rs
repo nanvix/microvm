@@ -39,7 +39,7 @@ pub enum VirtualProcessorExitContext<'a> {
 // Implementations
 //==================================================================================================
 
-impl<'a> VirtualProcessorExitContext<'_> {
+impl VirtualProcessorExitContext<'_> {
     ///
     /// # Description
     ///
