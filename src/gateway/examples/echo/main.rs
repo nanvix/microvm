@@ -86,6 +86,11 @@ fn main() -> Result<()> {
             },
         };
 
+        // Swap the source and destination of the message.
+        let source: ProcessIdentifier = message.destination;
+        message.destination = message.source;
+        message.source = source;
+
         // Send the message back to the gateway.
         if let Err(e) = tx.blocking_send(Ok(message)) {
             error!("failed to send message (error={:?})", e);
