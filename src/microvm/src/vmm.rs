@@ -19,12 +19,11 @@ use crate::{
 };
 use ::anyhow::Result;
 use ::gateway::{
-    gateway::GatewayReceiver,
-    GatewaySender,
+    Gateway,
+    HttpGatewayClient,
 };
 use ::std::{
     cell::RefCell,
-    collections::VecDeque,
     fs::File,
     io::Write,
     mem,
@@ -39,7 +38,10 @@ use ::sys::ipc::{
     Message,
     MessageType,
 };
-use ::tokio::sync::mpsc::Sender;
+use ::tokio::sync::mpsc::{
+    UnboundedReceiver,
+    UnboundedSender,
+};
 
 //==================================================================================================
 // Structure
@@ -48,8 +50,6 @@ use ::tokio::sync::mpsc::Sender;
 pub struct Vmm {
     microvm: MicroVm,
 }
-
-type MessageQueue = Rc<RefCell<VecDeque<Sender<Result<Message, anyhow::Error>>>>>;
 
 //==================================================================================================
 // Implementations
@@ -66,23 +66,25 @@ impl Vmm {
         crate::timer!("vmm_creation");
 
         // Create gateway.
-        let (receiver, sender): (GatewayReceiver, GatewaySender) = gateway::new(sockaddr);
+        let (mut gateway, vm_tx, vm_rx): (
+            Gateway<HttpGatewayClient>,
+            UnboundedSender<Message>,
+            UnboundedReceiver<Message>,
+        ) = Gateway::<HttpGatewayClient>::new(sockaddr);
 
         // Spawn I/O thread.
         let _io_thread: JoinHandle<()> = thread::spawn(move || {
-            if let Err(e) = receiver.run() {
+            if let Err(e) = gateway.run() {
                 error!("gateway thread failed: {:?}", e);
             }
         });
 
-        let queue: MessageQueue = Rc::new(RefCell::new(VecDeque::new()));
-
         // Input function used for emulating I/O port reads.
-        let input: Box<microvm::InputFn> = Self::build_input_fn(queue.clone(), sender);
+        let input: Box<microvm::InputFn> = Self::build_input_fn(vm_rx);
 
         // Output function used for emulating I/O port writes.
         let output: Box<microvm::OutputFn> =
-            Self::build_output_fn(Self::get_stderr_writer(stderr.clone())?, queue);
+            Self::build_output_fn(Self::get_stderr_writer(stderr.clone())?, vm_tx);
 
         let mut microvm: MicroVm = MicroVm::new(memory_size, input, output)?;
 
@@ -143,10 +145,7 @@ impl Vmm {
         Ok(file_writer)
     }
 
-    fn build_input_fn(
-        input_queue: MessageQueue,
-        mut sender: GatewaySender,
-    ) -> Box<microvm::InputFn> {
+    fn build_input_fn(mut input_queue: UnboundedReceiver<Message>) -> Box<microvm::InputFn> {
         // Input function used for emulating I/O port reads.
         let input = move |vm: &Rc<RefCell<VirtualMemory>>, data, size| -> Result<()> {
             // Check for invalid operand size.
@@ -156,15 +155,17 @@ impl Vmm {
                 anyhow::bail!(reason);
             }
 
-            match sender.try_recv() {
-                Ok((mut msg, tx)) => {
+            match input_queue.try_recv() {
+                Ok(mut msg) => {
                     msg.message_type = MessageType::Ikc;
                     vm.borrow_mut().write_bytes(data as u64, &msg.to_bytes())?;
-
-                    input_queue.borrow_mut().push_back(tx);
                 },
                 // No message available.
-                Err(tokio::sync::mpsc::error::TryRecvError::Empty) => return Ok(()),
+                Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
+                    let empty_message = Message::default();
+                    vm.borrow_mut()
+                        .write_bytes(data as u64, &empty_message.to_bytes())?;
+                },
                 // Channel has disconnected.
                 Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
                     let reason: String = "channel has been disconnected".to_string();
@@ -181,7 +182,7 @@ impl Vmm {
 
     fn build_output_fn(
         mut file_writer: Box<dyn Write>,
-        queue: MessageQueue,
+        queue: UnboundedSender<Message>,
     ) -> Box<microvm::OutputFn> {
         // Output function used for emulating I/O port writes.
         let output = move |vm: &Rc<RefCell<VirtualMemory>>, data, size| -> Result<()> {
@@ -220,12 +221,10 @@ impl Vmm {
                     },
                 };
 
-                if let Some(tx) = queue.borrow_mut().pop_front() {
-                    if let Err(e) = tx.blocking_send(Ok(message)) {
-                        let reason: String = format!("failed to send message: {:?}", e);
-                        error!("output(): {}", reason);
-                        anyhow::bail!(reason);
-                    }
+                if let Err(e) = queue.send(message) {
+                    let reason: String = format!("failed to send message: {:?}", e);
+                    error!("output(): {}", reason);
+                    anyhow::bail!(reason);
                 }
 
                 Ok(())

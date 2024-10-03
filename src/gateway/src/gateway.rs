@@ -5,34 +5,17 @@
 // Imports
 //==================================================================================================
 
-use ::anyhow::{
-    anyhow,
-    Result,
-};
-use ::http_body_util::{
-    BodyExt,
-    Full,
-};
-use ::hyper::{
-    body::{
-        Bytes,
-        Incoming,
-    },
-    server::conn::http1,
-    service::Service,
-    Request,
-    Response,
-    StatusCode,
-};
-use ::hyper_util::rt::TokioIo;
-use ::serde::Deserialize;
-use ::serde_json::Value;
+use crate::route::GatewayLookupTable;
+use ::anyhow::Result;
 use ::std::{
     future::Future,
     net::SocketAddr,
     pin::Pin,
 };
-use ::sys::ipc::Message;
+use ::sys::{
+    ipc::Message,
+    pm::ProcessIdentifier,
+};
 use ::tokio::{
     net::{
         TcpListener,
@@ -41,200 +24,298 @@ use ::tokio::{
     sync::{
         mpsc,
         mpsc::{
-            Receiver,
-            Sender,
+            UnboundedReceiver,
+            UnboundedSender,
         },
     },
 };
 
-#[derive(Deserialize)]
-struct MessageJson {
-    source: u32,
-    destination: u32,
-    payload: Option<Vec<u8>>,
-}
-
 //==================================================================================================
-// Standalone Functions
+// Traits
 //==================================================================================================
 
-type ChannelType = (Message, mpsc::Sender<Result<Message, anyhow::Error>>);
-
-pub fn new(addr: SocketAddr) -> (GatewayReceiver, GatewaySender) {
-    let (tx_channel_to_vm, rx_from_stdin): (Sender<ChannelType>, Receiver<ChannelType>) =
-        mpsc::channel::<ChannelType>(1024);
-    (
-        GatewayReceiver::new(addr, tx_channel_to_vm),
-        GatewaySender {
-            output: rx_from_stdin,
-        },
-    )
-}
-
-pub struct GatewaySender {
-    output: mpsc::Receiver<(Message, mpsc::Sender<Result<Message, anyhow::Error>>)>,
-}
-
-impl GatewaySender {
-    pub fn try_recv(
-        &mut self,
-    ) -> Result<(Message, mpsc::Sender<Result<Message, anyhow::Error>>), mpsc::error::TryRecvError>
-    {
-        self.output.try_recv()
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct GatewayReceiver {
-    addr: SocketAddr,
-    tx_channel_to_vm: mpsc::Sender<(Message, mpsc::Sender<Result<Message, anyhow::Error>>)>,
-}
-
-impl GatewayReceiver {
+///
+/// Gateway Client
+///
+pub trait GatewayClient: Sized + Send {
+    ///
+    /// # Description
+    ///
+    /// Creates a new gateway client.
+    ///
+    /// # Parameters
+    ///
+    /// - `addr`: Address of the client.
+    /// - `tx`: Transmit endpoint for messages to clients.
+    /// - `rx`: Receive endpoint for messages from clients.
+    ///
+    /// # Returns
+    ///
+    /// A new gateway client.
+    ///
     fn new(
         addr: SocketAddr,
-        tx_channel_to_vm: mpsc::Sender<(Message, mpsc::Sender<Result<Message, anyhow::Error>>)>,
-    ) -> Self {
-        Self {
-            addr,
-            tx_channel_to_vm,
-        }
-    }
+        tx: UnboundedSender<(SocketAddr, Message)>,
+        rx: UnboundedReceiver<Message>,
+    ) -> Self;
 
-    #[tokio::main]
-    pub async fn run(&self) -> Result<()> {
-        let listener: TcpListener = TcpListener::bind(self.addr).await?;
-        loop {
-            let (stream, _) = listener.accept().await?;
-            trace!("http_server(): accepted connection from {}", stream.peer_addr()?);
-
-            let io: TokioIo<TcpStream> = TokioIo::new(stream);
-
-            let input = self.clone();
-
-            // Spawn a tokio task to serve multiple connections concurrently
-            tokio::task::spawn(async move {
-                // Finally, we bind the incoming connection to our `hello` service
-                if let Err(err) = http1::Builder::new()
-                // `service_fn` converts our function in a `Service`
-                .serve_connection(io,  input)
-                .await
-                {
-                    error!("Error serving connection: {:?}", err);
-                }
-            });
-        }
-    }
-    fn bad_request() -> Response<Full<Bytes>> {
-        let mut bad_request: Response<Full<Bytes>> = Response::new(Full::new(Bytes::new()));
-        *bad_request.status_mut() = hyper::StatusCode::BAD_REQUEST;
-        bad_request
-    }
-
-    fn internal_server_error() -> Response<Full<Bytes>> {
-        let mut internal_server_error: Response<Full<Bytes>> =
-            Response::new(Full::new(Bytes::new()));
-        *internal_server_error.status_mut() = hyper::StatusCode::INTERNAL_SERVER_ERROR;
-        internal_server_error
-    }
-
-    fn bytes_to_message(body: Bytes) -> Result<Message> {
-        // Deserialize the JSON directly into the struct
-        let message_json: MessageJson = serde_json::from_slice(body.as_ref())
-            .map_err(|_| anyhow!("failed to parse request"))?;
-
-        let mut message: sys::ipc::Message = sys::ipc::Message::new(
-            sys::pm::ProcessIdentifier::from(message_json.source),
-            sys::pm::ProcessIdentifier::from(message_json.destination),
-            sys::ipc::MessageType::Ikc,
-            [0; Message::PAYLOAD_SIZE],
-        );
-
-        // Write "Payload" value as a raw array of bytes.
-        if let Some(payload) = message_json.payload {
-            let len = payload.len().min(Message::PAYLOAD_SIZE);
-            message.payload[..len].copy_from_slice(&payload[..len]);
-        }
-
-        Ok(message)
-    }
-
-    fn message_to_bytes(message: Message) -> Result<Bytes> {
-        // Convert message to JSON.
-        let json: Value = serde_json::json!({
-            "source": u32::from(message.source),
-            "destination": u32::from(message.destination),
-            "message_type": format!("{:?}", message.message_type),
-            "payload": message.payload.to_vec(),
-        });
-
-        // Convert JSON to bytes.
-        match serde_json::to_vec(&json) {
-            Ok(bytes) => Ok(Bytes::from(bytes)),
-            Err(_) => anyhow::bail!("failed to parse request"),
-        }
-    }
-
-    async fn process(&self, incoming: Message) -> Result<Option<Message>> {
-        let (tx, mut rx) = mpsc::channel::<Result<Message, anyhow::Error>>(1);
-
-        self.tx_channel_to_vm.send((incoming, tx)).await?;
-
-        match rx.recv().await {
-            Some(message) => Ok(Some(message?)),
-            None => Ok(None),
-        }
-    }
+    ///
+    /// # Description
+    ///
+    /// Runs the gateway client.
+    ///
+    /// # Parameters
+    ///
+    /// - `client`: Gateway client.
+    /// - `stream`: TCP stream associated with the client.
+    ///
+    /// # Returns
+    ///
+    /// A future that resolves to `Ok(())` on success, or `Err(e)` on failure.
+    ///
+    fn run(
+        client: Self,
+        stream: TcpStream,
+    ) -> Pin<Box<(dyn Future<Output = Result<(), anyhow::Error>> + std::marker::Send)>>;
 }
 
-impl Service<Request<Incoming>> for GatewayReceiver {
-    type Response = Response<Full<Bytes>>;
-    type Error = hyper::Error;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+//==================================================================================================
+// Structures
+//==================================================================================================
 
-    fn call(&self, request: Request<Incoming>) -> Self::Future {
-        let self_clone = self.clone();
-        let future = async move {
-            let body: Bytes = request.collect().await?.to_bytes();
+///
+/// Gateway
+///
+pub struct Gateway<T: GatewayClient> {
+    /// Address of the gateway.
+    addr: SocketAddr,
+    /// Transmit endpoint for messages to clients.
+    gateway_client_tx: UnboundedSender<(SocketAddr, Message)>,
+    /// Receive endpoint for messages from clients.
+    gateway_client_rx: UnboundedReceiver<(SocketAddr, Message)>,
+    /// Transmit endpoint for messages to the service.
+    gateway_service_tx: UnboundedSender<Message>,
+    /// Receive endpoint for messages from the service.
+    gateway_service_rx: UnboundedReceiver<Message>,
+    /// Lookup tables.
+    lookup_tables: GatewayLookupTable,
+    /// Marker to force ownership over [`GatewayClient`].
+    _phantom: std::marker::PhantomData<T>,
+}
 
-            let message: Message = match Self::bytes_to_message(body) {
-                Ok(message) => message,
-                Err(_) => {
-                    return Ok(Self::bad_request());
+//==================================================================================================
+// Implementations
+//==================================================================================================
+
+// Type aliases to make clippy happy.
+type ClientGatewayRx = UnboundedReceiver<(SocketAddr, Message)>;
+type ClientGatewayTx = UnboundedSender<(SocketAddr, Message)>;
+
+impl<T: GatewayClient> Gateway<T> {
+    ///
+    /// # Description
+    ///
+    /// Creates a new gateway.
+    ///
+    /// # Parameters
+    ///
+    /// - `addr`: Address of the gateway.
+    ///
+    /// # Returns
+    ///
+    /// A new gateway.
+    ///
+    pub fn new(
+        addr: SocketAddr,
+    ) -> (Gateway<T>, UnboundedSender<Message>, UnboundedReceiver<Message>) {
+        // Create an asynchronous channel to enable communication from the gateway to the service.
+        let (gateway_service_tx, service_rx): (
+            UnboundedSender<Message>,
+            UnboundedReceiver<Message>,
+        ) = mpsc::unbounded_channel();
+
+        // Create an asynchronous channel to enable communication from the service to the gateway.
+        let (service_tx, gateway_service_rx): (
+            UnboundedSender<Message>,
+            UnboundedReceiver<Message>,
+        ) = mpsc::unbounded_channel();
+
+        // Create an asynchronous channel to enable communication from the client to the gateway.
+        let (gateway_client_tx, gateway_client_rx): (ClientGatewayTx, ClientGatewayRx) =
+            mpsc::unbounded_channel();
+
+        (
+            Self {
+                addr,
+                gateway_client_rx,
+                gateway_client_tx,
+                gateway_service_tx,
+                gateway_service_rx,
+                lookup_tables: GatewayLookupTable::new(),
+                _phantom: std::marker::PhantomData,
+            },
+            service_tx,
+            service_rx,
+        )
+    }
+
+    ///
+    /// # Description
+    ///
+    /// Runs the gateway.
+    ///
+    /// # Returns
+    ///
+    /// A future that resolves to `Ok(())` on success, or `Err(e)` on failure.
+    ///
+    #[tokio::main]
+    pub async fn run(&mut self) -> Result<()> {
+        let listener: TcpListener = TcpListener::bind(self.addr).await?;
+        loop {
+            tokio::select! {
+                // Attempt to accept a new client.
+                Ok((stream, addr)) = listener.accept() => {
+                   if let Err(e) = self.handle_accept(stream, addr).await {
+                        warn!("run(): {:?}", e);
+                   }
                 },
-            };
-
-            let message: Option<Message> = match self_clone.process(message).await {
-                Ok(message) => message,
-                Err(_) => {
-                    return Ok(Self::internal_server_error());
+                // Attempt from receive a message from any client.
+                Some((addr, message)) = self.gateway_client_rx.recv() => {
+                    if let Err(e) = self.handle_client_message(addr, message).await {
+                        warn!("run(): {:?}", e);
+                    }
                 },
-            };
-
-            let bytes: Bytes = if let Some(message) = message {
-                match Self::message_to_bytes(message) {
-                    Ok(bytes) => bytes,
-                    Err(_) => {
-                        return Ok(Self::internal_server_error());
-                    },
+                // Attempt to receive a message from the service.
+                Some(message) = self.gateway_service_rx.recv() => {
+                    if let Err(e) = self.handle_service_message(message).await {
+                        warn!("run(): {:?}", e);
+                    }
                 }
-            } else {
-                Bytes::new()
-            };
-
-            match Response::builder()
-                .status(StatusCode::OK)
-                .header("Content-Type", "application/json")
-                .header("Content-Length", bytes.len())
-                .body(Full::new(bytes))
-                .map_err(|_| Self::bad_request())
-                .map_err(|_| Self::bad_request())
-            {
-                Ok(response) => Ok(response),
-                Err(_) => Ok(Self::bad_request()),
             }
-        };
+        }
+    }
 
-        Box::pin(future)
+    ///
+    /// # Description
+    ///
+    /// Handles accept.
+    ///
+    /// # Parameters
+    ///
+    /// - `stream`: TCP stream associated with the client.
+    /// - `addr`: Address of the client.
+    ///
+    /// # Returns
+    ///
+    /// A future that resolves to `Ok(())` on success, or `Err(e)` on failure.
+    ///
+    async fn handle_accept(&mut self, stream: TcpStream, addr: SocketAddr) -> Result<()> {
+        trace!("handle_accept(): addr={:?}", addr);
+
+        // Create an asynchronous channel to enable communication from the gateway to the client.
+        let (client_tx, client_rx): (UnboundedSender<Message>, UnboundedReceiver<Message>) =
+            mpsc::unbounded_channel::<Message>();
+
+        let client: Pin<Box<dyn Future<Output = std::result::Result<(), anyhow::Error>> + Send>> =
+            T::run(T::new(addr, self.gateway_client_tx.clone(), client_rx), stream);
+
+        // Attempt to register the client.
+        self.lookup_tables.register_addr(addr, client_tx).await?;
+
+        let lookup_tables: GatewayLookupTable = self.lookup_tables.clone();
+        tokio::task::spawn(async move {
+            if let Err(e) = client.await {
+                error!("failed to run client: {:?}", e);
+            }
+
+            // Handle client disconnection.
+            Self::handle_disconnect(&lookup_tables, addr).await
+        });
+
+        Ok(())
+    }
+
+    ///
+    /// # Description
+    ///
+    /// Handles a client disconnection.
+    ///
+    /// # Parameters
+    ///
+    /// - `lookup_tables`: Lookup tables.
+    ///
+    /// # Returns
+    ///
+    /// A future that resolves to `Ok(())` on success, or `Err(e)` on failure.
+    ///
+    async fn handle_disconnect(lookup_tables: &GatewayLookupTable, addr: SocketAddr) -> Result<()> {
+        trace!("handle_disconnect(): addr={:?}", addr);
+
+        GatewayLookupTable::remove(lookup_tables, addr).await?;
+
+        Ok(())
+    }
+
+    ///
+    /// # Description
+    ///
+    /// Handles a message from a client.
+    ///
+    /// # Parameters
+    ///
+    /// - `message`: Message to handle.
+    ///
+    /// # Returns
+    ///
+    /// A future that resolves to `Ok(())` on success, or `Err(e)` on failure.
+    ///
+    async fn handle_client_message(&mut self, addr: SocketAddr, message: Message) -> Result<()> {
+        trace!(
+            "handle_client_message(): addr={:?}, message.source={:?}, message.destination={:?}",
+            addr,
+            message.source,
+            message.destination
+        );
+
+        let pid: ProcessIdentifier = message.source;
+        self.lookup_tables.register_pid(pid, addr).await?;
+
+        // Forward message to the service.
+        self.gateway_service_tx.send(message)?;
+
+        Ok(())
+    }
+
+    ///
+    /// # Description
+    ///
+    /// Handles a message from the service.
+    ///
+    /// # Parameters
+    ///
+    /// - `message`: Message to handle.
+    ///
+    /// # Returns
+    ///
+    /// A future that resolves to `Ok(())` on success, or `Err(e)` on failure.
+    ///
+    async fn handle_service_message(&mut self, message: Message) -> Result<()> {
+        trace!(
+            "handle_service_message(): message.source={:?}, message.destination={:?}",
+            message.source,
+            message.destination
+        );
+
+        // Retrieve client.
+        let client: UnboundedSender<Message> =
+            self.lookup_tables.lookup(message.destination).await?;
+
+        // Forward the message to the client.
+        if let Err(e) = client.send(message) {
+            let reason: String = format!("failed to send message to client (error={:?})", e);
+            panic!("handle_service_message(): {}", reason);
+        }
+
+        Ok(())
     }
 }
