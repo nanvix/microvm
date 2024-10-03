@@ -32,8 +32,8 @@ extern crate log;
 use crate::args::Args;
 use ::anyhow::Result;
 use ::gateway::{
-    gateway::GatewayReceiver,
-    GatewaySender,
+    Gateway,
+    HttpGatewayClient,
 };
 use ::std::{
     env,
@@ -42,6 +42,10 @@ use ::std::{
         self,
         JoinHandle,
     },
+};
+use ::sys::{
+    ipc::Message,
+    pm::ProcessIdentifier,
 };
 
 //==================================================================================================
@@ -59,7 +63,7 @@ fn main() -> Result<()> {
     let sockaddr: SocketAddr = args.sockaddr().parse()?;
 
     // Create gateway.
-    let (gateway, mut rx): (GatewayReceiver, GatewaySender) = gateway::new(sockaddr);
+    let (mut gateway, tx, mut rx) = Gateway::<HttpGatewayClient>::new(sockaddr);
 
     // Spawn a thread to run the gateway and handle incoming messages.
     let _gateway_thread: JoinHandle<()> = thread::spawn(move || {
@@ -71,11 +75,11 @@ fn main() -> Result<()> {
     // Process incoming messages.
     loop {
         // Attempt to receive a message from the gateway.
-        let (tx, message) = match rx.try_recv() {
-            Ok((msg, tx)) => {
+        let mut message: Message = match rx.try_recv() {
+            Ok(msg) => {
                 info!("received message from stdin: {:?}", msg);
 
-                (tx, msg)
+                msg
             },
             // No message available.
             Err(tokio::sync::mpsc::error::TryRecvError::Empty) => continue,
@@ -86,8 +90,13 @@ fn main() -> Result<()> {
             },
         };
 
+        // Swap the source and destination of the message.
+        let source: ProcessIdentifier = message.destination;
+        message.destination = message.source;
+        message.source = source;
+
         // Send the message back to the gateway.
-        if let Err(e) = tx.blocking_send(Ok(message)) {
+        if let Err(e) = tx.send(message) {
             error!("failed to send message (error={:?})", e);
         }
     }

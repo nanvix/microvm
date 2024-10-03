@@ -8,4 +8,4 @@
 //!
 
 /// Default name of the program.
-pub const PROGRAM_NAME: &'static str = "microvm";
+pub const PROGRAM_NAME: &str = "microvm";
