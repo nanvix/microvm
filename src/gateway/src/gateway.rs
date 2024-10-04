@@ -181,10 +181,16 @@ impl<T: GatewayClient> Gateway<T> {
                         warn!("run(): {:?}", e);
                    }
                 },
-                // Attempt from receive a message from any client.
+                // Attempt to receive a message from any client.
                 Some((addr, message)) = self.gateway_client_rx.recv() => {
                     if let Err(e) = self.handle_client_message(addr, message).await {
+                        // Failed to handle client message, send error back to the client.
                         warn!("run(): {:?}", e);
+                        if let Ok(client) = self.lookup_tables.lookup_addr(addr).await {
+                            if let Err(e) = client.send(Err(e)) {
+                                error!("run(): {:?}", e);
+                            }
+                        }
                     }
                 },
                 // Attempt to receive a message from the service.
