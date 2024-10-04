@@ -315,7 +315,8 @@ impl<T: GatewayClient> Gateway<T> {
         // Forward the message to the client.
         if let Err(e) = client.send(Ok(message)) {
             let reason: String = format!("failed to send message to client (error={:?})", e);
-            panic!("handle_service_message(): {}", reason);
+            error!("handle_service_message(): {}", reason);
+            anyhow::bail!(reason);
         }
 
         Ok(())
