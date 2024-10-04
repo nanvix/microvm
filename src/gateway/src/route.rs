@@ -32,7 +32,7 @@ use ::tokio::sync::{
 #[derive(Clone)]
 pub struct GatewayLookupTable {
     /// Clients connected to the gateway.
-    clients: Arc<RwLock<HashMap<SocketAddr, UnboundedSender<Message>>>>,
+    clients: Arc<RwLock<LookupTable>>,
     /// Hash table that resolves client addresses to process identifiers.
     pids_to_clients: Arc<RwLock<HashMap<u32, SocketAddr>>>,
 }
@@ -42,7 +42,7 @@ pub struct GatewayLookupTable {
 //==================================================================================================
 
 // Type aliases to make clippy happy.
-type LookupTable = HashMap<SocketAddr, UnboundedSender<Message>>;
+type LookupTable = HashMap<SocketAddr, UnboundedSender<Result<Message, anyhow::Error>>>;
 type PidTable = HashMap<u32, SocketAddr>;
 type LookupTableReadGuard<'a> = RwLockReadGuard<'a, LookupTable>;
 type LookupTableWriteGuard<'a> = RwLockWriteGuard<'a, LookupTable>;
@@ -82,7 +82,7 @@ impl GatewayLookupTable {
     pub async fn register_addr(
         &mut self,
         addr: SocketAddr,
-        client_tx: UnboundedSender<Message>,
+        client_tx: UnboundedSender<Result<Message, anyhow::Error>>,
     ) -> Result<()> {
         trace!("register_addr(): addr={:?}", addr);
 
@@ -135,8 +135,8 @@ impl GatewayLookupTable {
             // Check if address does not match the expected one.
             if *registerd_addr != addr {
                 let reason: String = format!(
-                    "process identifier registered for a different address (pid={:?}, addr={:?})",
-                    pid, addr
+                    "pid already registered (pid={:?}, addr={:?}, registered_addr={:?})",
+                    pid, addr, registerd_addr
                 );
                 error!("register_pid(): {}", reason);
                 anyhow::bail!(reason);
@@ -197,7 +197,7 @@ impl GatewayLookupTable {
     ///
     /// # Description
     ///
-    /// Looks up a client.
+    /// Looks up a client based on its process identifier.
     ///
     /// # Parameters
     ///
@@ -207,7 +207,10 @@ impl GatewayLookupTable {
     ///
     /// The client associated with the process identifier.
     ///
-    pub async fn lookup(&self, pid: ProcessIdentifier) -> Result<UnboundedSender<Message>> {
+    pub async fn lookup_pid(
+        &self,
+        pid: ProcessIdentifier,
+    ) -> Result<UnboundedSender<Result<Message, anyhow::Error>>> {
         trace!("lookup(): pid={:?}", pid);
 
         // Lock tables for reading.
@@ -243,6 +246,42 @@ impl GatewayLookupTable {
     ///
     /// # Description
     ///
+    /// Looks up a client based on its address.
+    ///
+    /// # Parameters
+    ///
+    /// - `addr`: Address of the client.
+    ///
+    /// # Returns
+    ///
+    /// The client associated with the address.
+    ///
+    pub async fn lookup_addr(
+        &self,
+        addr: SocketAddr,
+    ) -> Result<UnboundedSender<Result<Message, anyhow::Error>>> {
+        trace!("lookup_addr(): addr={:?}", addr);
+
+        // Lock tables for reading.
+        let (_pids_to_clients, clients): (PidTableReadGuard<'_>, LookupTableReadGuard<'_>) =
+            Self::lock_tables_read(&self.pids_to_clients, &self.clients).await;
+
+        // Lookup address.
+        match clients.get(&addr) {
+            // Found matching address.
+            Some(client) => Ok(client.clone()),
+            // Address not found.
+            None => {
+                let reason: String = format!("unknown address (addr={:?})", addr);
+                error!("lookup_addr(): {}", reason);
+                anyhow::bail!(reason);
+            },
+        }
+    }
+
+    ///
+    /// # Description
+    ///
     /// Helper function that locks lookup tables for reading.
     ///
     /// # Parameters
@@ -256,15 +295,11 @@ impl GatewayLookupTable {
     ///
     async fn lock_tables_read<'a>(
         pids_to_clients: &'a Arc<RwLock<HashMap<u32, SocketAddr>>>,
-        clients: &'a Arc<RwLock<HashMap<SocketAddr, UnboundedSender<Message>>>>,
-    ) -> (
-        RwLockReadGuard<'a, HashMap<u32, SocketAddr>>,
-        RwLockReadGuard<'a, HashMap<SocketAddr, UnboundedSender<Message>>>,
-    ) {
+        clients: &'a Arc<RwLock<LookupTable>>,
+    ) -> (RwLockReadGuard<'a, HashMap<u32, SocketAddr>>, RwLockReadGuard<'a, LookupTable>) {
         let pids_to_clients: RwLockReadGuard<'a, HashMap<u32, SocketAddr>> =
             pids_to_clients.read().await;
-        let clients: RwLockReadGuard<'a, HashMap<SocketAddr, UnboundedSender<Message>>> =
-            clients.read().await;
+        let clients: RwLockReadGuard<'a, LookupTable> = clients.read().await;
         (pids_to_clients, clients)
     }
 
@@ -284,15 +319,11 @@ impl GatewayLookupTable {
     ///
     async fn lock_tables_write<'a>(
         pids_to_clients: &'a Arc<RwLock<HashMap<u32, SocketAddr>>>,
-        clients: &'a Arc<RwLock<HashMap<SocketAddr, UnboundedSender<Message>>>>,
-    ) -> (
-        RwLockWriteGuard<'a, HashMap<u32, SocketAddr>>,
-        RwLockWriteGuard<'a, HashMap<SocketAddr, UnboundedSender<Message>>>,
-    ) {
+        clients: &'a Arc<RwLock<LookupTable>>,
+    ) -> (RwLockWriteGuard<'a, HashMap<u32, SocketAddr>>, RwLockWriteGuard<'a, LookupTable>) {
         let pids_to_clients: RwLockWriteGuard<'a, HashMap<u32, SocketAddr>> =
             pids_to_clients.write().await;
-        let clients: RwLockWriteGuard<'a, HashMap<SocketAddr, UnboundedSender<Message>>> =
-            clients.write().await;
+        let clients: RwLockWriteGuard<'a, LookupTable> = clients.write().await;
         (pids_to_clients, clients)
     }
 }

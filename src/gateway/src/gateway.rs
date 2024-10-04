@@ -56,7 +56,7 @@ pub trait GatewayClient: Sized + Send {
     fn new(
         addr: SocketAddr,
         tx: UnboundedSender<(SocketAddr, Message)>,
-        rx: UnboundedReceiver<Message>,
+        rx: UnboundedReceiver<Result<Message, anyhow::Error>>,
     ) -> Self;
 
     ///
@@ -110,6 +110,8 @@ pub struct Gateway<T: GatewayClient> {
 // Type aliases to make clippy happy.
 type ClientGatewayRx = UnboundedReceiver<(SocketAddr, Message)>;
 type ClientGatewayTx = UnboundedSender<(SocketAddr, Message)>;
+type ClientRx = UnboundedReceiver<Result<Message, anyhow::Error>>;
+type ClientTx = UnboundedSender<Result<Message, anyhow::Error>>;
 
 impl<T: GatewayClient> Gateway<T> {
     ///
@@ -179,10 +181,16 @@ impl<T: GatewayClient> Gateway<T> {
                         warn!("run(): {:?}", e);
                    }
                 },
-                // Attempt from receive a message from any client.
+                // Attempt to receive a message from any client.
                 Some((addr, message)) = self.gateway_client_rx.recv() => {
                     if let Err(e) = self.handle_client_message(addr, message).await {
+                        // Failed to handle client message, send error back to the client.
                         warn!("run(): {:?}", e);
+                        if let Ok(client) = self.lookup_tables.lookup_addr(addr).await {
+                            if let Err(e) = client.send(Err(e)) {
+                                error!("run(): {:?}", e);
+                            }
+                        }
                     }
                 },
                 // Attempt to receive a message from the service.
@@ -213,8 +221,8 @@ impl<T: GatewayClient> Gateway<T> {
         trace!("handle_accept(): addr={:?}", addr);
 
         // Create an asynchronous channel to enable communication from the gateway to the client.
-        let (client_tx, client_rx): (UnboundedSender<Message>, UnboundedReceiver<Message>) =
-            mpsc::unbounded_channel::<Message>();
+        let (client_tx, client_rx): (ClientTx, ClientRx) =
+            mpsc::unbounded_channel::<Result<Message, anyhow::Error>>();
 
         let client: Pin<Box<dyn Future<Output = std::result::Result<(), anyhow::Error>> + Send>> =
             T::run(T::new(addr, self.gateway_client_tx.clone(), client_rx), stream);
@@ -225,7 +233,7 @@ impl<T: GatewayClient> Gateway<T> {
         let lookup_tables: GatewayLookupTable = self.lookup_tables.clone();
         tokio::task::spawn(async move {
             if let Err(e) = client.await {
-                error!("failed to run client: {:?}", e);
+                warn!("failed to run client: {:?}", e);
             }
 
             // Handle client disconnection.
@@ -307,13 +315,14 @@ impl<T: GatewayClient> Gateway<T> {
         );
 
         // Retrieve client.
-        let client: UnboundedSender<Message> =
-            self.lookup_tables.lookup(message.destination).await?;
+        let client: UnboundedSender<Result<Message, anyhow::Error>> =
+            self.lookup_tables.lookup_pid(message.destination).await?;
 
         // Forward the message to the client.
-        if let Err(e) = client.send(message) {
+        if let Err(e) = client.send(Ok(message)) {
             let reason: String = format!("failed to send message to client (error={:?})", e);
-            panic!("handle_service_message(): {}", reason);
+            error!("handle_service_message(): {}", reason);
+            anyhow::bail!(reason);
         }
 
         Ok(())
