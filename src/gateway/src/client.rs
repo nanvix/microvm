@@ -67,7 +67,7 @@ pub struct HttpGatewayClient {
     /// Transmit endpoint for messages form the client to the gateway.
     tx: UnboundedSender<(SocketAddr, Message)>,
     /// Receive endpoint for messages from the gateway to the client.
-    rx: Arc<RwLock<UnboundedReceiver<Message>>>,
+    rx: Arc<RwLock<UnboundedReceiver<Result<Message, anyhow::Error>>>>,
 }
 
 impl HttpGatewayClient {
@@ -182,7 +182,7 @@ impl GatewayClient for HttpGatewayClient {
     fn new(
         addr: SocketAddr,
         tx: UnboundedSender<(SocketAddr, Message)>,
-        rx: UnboundedReceiver<Message>,
+        rx: UnboundedReceiver<Result<Message, anyhow::Error>>,
     ) -> Self {
         HttpGatewayClient {
             addr,
@@ -212,7 +212,8 @@ impl Service<Request<Incoming>> for HttpGatewayClient {
 
     fn call(&self, request: Request<Incoming>) -> Self::Future {
         let lan_tx: UnboundedSender<(SocketAddr, Message)> = self.tx.clone();
-        let client_rx: Arc<RwLock<UnboundedReceiver<Message>>> = self.rx.clone();
+        let client_rx: Arc<RwLock<UnboundedReceiver<Result<Message, anyhow::Error>>>> =
+            self.rx.clone();
         let addr: SocketAddr = self.addr;
         let future = async move {
             let body: Bytes = request.collect().await?.to_bytes();
@@ -234,11 +235,13 @@ impl Service<Request<Incoming>> for HttpGatewayClient {
             }
 
             {
-                let mut client_rx: RwLockWriteGuard<'_, UnboundedReceiver<Message>> =
-                    client_rx.write().await;
+                let mut client_rx: RwLockWriteGuard<
+                    '_,
+                    UnboundedReceiver<Result<Message, anyhow::Error>>,
+                > = client_rx.write().await;
                 trace!("waiting for response from the gateway");
-                match client_rx.try_recv() {
-                    Ok(message) => {
+                match client_rx.recv().await {
+                    Some(Ok(message)) => {
                         let bytes: Bytes = match Self::message_to_bytes(message) {
                             Ok(bytes) => bytes,
                             Err(_) => {
@@ -259,7 +262,16 @@ impl Service<Request<Incoming>> for HttpGatewayClient {
                             Err(_) => Ok(Self::bad_request()),
                         }
                     },
-                    Err(_) => Ok(Self::internal_server_error()),
+                    Some(Err(e)) => {
+                        let reason: String = format!("failed to receive message (error={:?})", e);
+                        error!("{}", reason);
+                        Ok(Self::bad_request())
+                    },
+                    None => {
+                        let reason: String = "channel has been disconnected".to_string();
+                        error!("{}", reason);
+                        Ok(Self::internal_server_error())
+                    },
                 }
             }
         };
