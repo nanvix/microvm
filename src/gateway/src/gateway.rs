@@ -233,7 +233,7 @@ impl<T: GatewayClient> Gateway<T> {
         let lookup_tables: GatewayLookupTable = self.lookup_tables.clone();
         tokio::task::spawn(async move {
             if let Err(e) = client.await {
-                error!("failed to run client: {:?}", e);
+                warn!("failed to run client: {:?}", e);
             }
 
             // Handle client disconnection.

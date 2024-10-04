@@ -135,8 +135,8 @@ impl GatewayLookupTable {
             // Check if address does not match the expected one.
             if *registerd_addr != addr {
                 let reason: String = format!(
-                    "process identifier registered for a different address (pid={:?}, addr={:?})",
-                    pid, addr
+                    "pid already registered (pid={:?}, addr={:?}, registered_addr={:?})",
+                    pid, addr, registerd_addr
                 );
                 error!("register_pid(): {}", reason);
                 anyhow::bail!(reason);

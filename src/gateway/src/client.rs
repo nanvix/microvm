@@ -197,10 +197,13 @@ impl GatewayClient for HttpGatewayClient {
     ) -> Pin<Box<(dyn Future<Output = Result<(), anyhow::Error>> + std::marker::Send)>> {
         let io: TokioIo<TcpStream> = TokioIo::new(stream);
         Box::pin(async move {
-            http1::Builder::new()
-                .serve_connection(io, client)
-                .await
-                .map_err(|e| anyhow::anyhow!(e))
+            if let Err(e) = http1::Builder::new().serve_connection(io, client).await {
+                let reason: String = format!("failed to serve connection (error={:?})", e);
+                error!("run(): {}", reason);
+                anyhow::bail!(reason);
+            }
+
+            Ok(())
         })
     }
 }
@@ -221,6 +224,8 @@ impl Service<Request<Incoming>> for HttpGatewayClient {
             let mut messages: LinkedList<Message> = match Self::bytes_to_message(body) {
                 Ok(message) => message,
                 Err(_) => {
+                    let reason: String = "failed to parse request".to_string();
+                    error!("{}", reason);
                     return Ok(Self::bad_request());
                 },
             };
@@ -245,6 +250,8 @@ impl Service<Request<Incoming>> for HttpGatewayClient {
                         let bytes: Bytes = match Self::message_to_bytes(message) {
                             Ok(bytes) => bytes,
                             Err(_) => {
+                                let reason: String = "failed to parse response".to_string();
+                                error!("{}", reason);
                                 return Ok(Self::internal_server_error());
                             },
                         };
@@ -259,7 +266,11 @@ impl Service<Request<Incoming>> for HttpGatewayClient {
                             .map_err(|_| Self::bad_request())
                         {
                             Ok(response) => Ok(response),
-                            Err(_) => Ok(Self::bad_request()),
+                            Err(_) => {
+                                let reason: String = "failed to build response".to_string();
+                                error!("{}", reason);
+                                Ok(Self::bad_request())
+                            },
                         }
                     },
                     Some(Err(e)) => {
