@@ -93,8 +93,7 @@ impl Scope {
     pub fn leave(&mut self, duration: u128) {
         self.num_calls += 1;
 
-        // Even though this is extremely unlikely, let's not panic on overflow.
-        self.duration_sum = self.duration_sum + duration;
+        self.duration_sum += duration;
     }
 
     /// Dump statistics.
