@@ -37,6 +37,7 @@ use ::gateway::{
 };
 use ::std::{
     env,
+    mem,
     net::SocketAddr,
     thread::{
         self,
@@ -91,9 +92,7 @@ fn main() -> Result<()> {
         };
 
         // Swap the source and destination of the message.
-        let source: ProcessIdentifier = message.destination;
-        message.destination = message.source;
-        message.source = source;
+        mem::swap(&mut message.destination, &mut message.source);
 
         // Send the message back to the gateway.
         if let Err(e) = tx.send(message) {
