@@ -14,7 +14,6 @@ use ::std::{
     },
     io,
     rc::Rc,
-    thread,
     time::Instant,
 };
 
