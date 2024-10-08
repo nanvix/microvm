@@ -17,7 +17,6 @@ use ::std::{
     io,
     rc::Rc,
 };
-use std::thread;
 
 use scope::{
     Guard,
