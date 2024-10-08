@@ -14,7 +14,6 @@ use ::std::{
     },
     io,
     rc::Rc,
-    thread,
     time::Instant,
 };
 
@@ -93,8 +92,7 @@ impl Scope {
     pub fn leave(&mut self, duration: u128) {
         self.num_calls += 1;
 
-        // Even though this is extremely unlikely, let's not panic on overflow.
-        self.duration_sum = self.duration_sum + duration;
+        self.duration_sum += duration;
     }
 
     /// Dump statistics.
@@ -127,7 +125,7 @@ impl Scope {
         writeln!(
             out,
             "{},{},{:.2},{:.2}",
-            format!("{},{}", markers, self.name),
+            format_args!("{},{}", markers, self.name),
             self.num_calls,
             percent_time,
             duration_sum_secs / (self.num_calls as f64),

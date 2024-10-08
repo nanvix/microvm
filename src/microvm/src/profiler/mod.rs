@@ -17,8 +17,6 @@ use ::std::{
     io,
     rc::Rc,
 };
-use std::thread;
-
 use scope::{
     Guard,
     Scope,
@@ -160,12 +158,8 @@ impl Profiler {
             .iter()
             .map(|root| root.borrow().get_duration_sum())
             .sum();
-        let thread_id: thread::ThreadId = thread::current().id();
 
-        writeln!(
-            out,
-            "call_depth,function_name,num_calls,percent_time,microsecs_per_call"
-        )?;
+        writeln!(out, "call_depth,function_name,num_calls,percent_time,microsecs_per_call")?;
         for root in self.roots.iter() {
             root.borrow()
                 .write_recursive(out, total_duration, 0, max_depth)?;
