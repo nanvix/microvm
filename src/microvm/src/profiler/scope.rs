@@ -126,7 +126,7 @@ impl Scope {
         writeln!(
             out,
             "{},{},{:.2},{:.2}",
-            format!("{},{}", markers, self.name),
+            format_args!("{},{}", markers, self.name),
             self.num_calls,
             percent_time,
             duration_sum_secs / (self.num_calls as f64),
