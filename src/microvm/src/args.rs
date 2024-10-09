@@ -38,7 +38,7 @@ pub struct Args {
     /// Standard error.
     vm_stderr: Option<String>,
     /// HTTP server address.
-    sockaddr: String,
+    http_addr: String,
 }
 
 //==================================================================================================
@@ -76,7 +76,7 @@ impl Args {
         let mut initrd_filename: Option<String> = None;
         let mut memory_size: usize = config::DEFAULT_MEMORY_SIZE;
         let mut vm_stderr: Option<String> = None;
-        let mut sockaddr: String = config::DEFAULT_HTTP_SOCKADDR.to_string();
+        let mut http_addr: String = config::DEFAULT_HTTP_SOCKADDR.to_string();
 
         // Parse command-line arguments.
         let mut i: usize = 1;
@@ -89,7 +89,7 @@ impl Args {
                 },
                 // Set HTTP server.
                 Self::OPT_HTTP if i + 1 < args.len() => {
-                    sockaddr = args[i + 1].clone();
+                    http_addr = args[i + 1].clone();
                     i += 1;
                 },
                 // Set initrd file.
@@ -172,7 +172,7 @@ impl Args {
             initrd_filename,
             memory_size,
             vm_stderr,
-            sockaddr,
+            http_addr,
         })
     }
 
@@ -259,7 +259,7 @@ impl Args {
     ///
     /// The HTTP server address that was passed as a command-line argument to the program.
     ///
-    pub fn sockaddr(&mut self) -> &str {
-        &self.sockaddr
+    pub fn http_addr(&mut self) -> &str {
+        &self.http_addr
     }
 }

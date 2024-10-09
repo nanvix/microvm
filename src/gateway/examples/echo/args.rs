@@ -30,7 +30,7 @@ use ::std::{
 ///
 pub struct Args {
     /// HTTP server address.
-    sockaddr: String,
+    http_addr: String,
 }
 
 //==================================================================================================
@@ -56,7 +56,7 @@ impl Args {
     pub fn parse(args: Vec<String>) -> Result<Self> {
         trace!("parse(): args={:?}", args);
 
-        let mut sockaddr: Option<String> = None;
+        let mut http_addr: Option<String> = None;
 
         // Parse command-line arguments.
         let mut i: usize = 1;
@@ -69,7 +69,7 @@ impl Args {
                 },
                 // Set HTTP server.
                 Self::OPT_HTTP if i + 1 < args.len() => {
-                    sockaddr = Some(args[i + 1].clone());
+                    http_addr = Some(args[i + 1].clone());
                     i += 1;
                 },
 
@@ -86,8 +86,8 @@ impl Args {
         }
 
         // Check if the socket address option was set.
-        if let Some(sockaddr) = sockaddr.take() {
-            Ok(Self { sockaddr })
+        if let Some(http_addr) = http_addr.take() {
+            Ok(Self { http_addr })
         } else {
             Self::usage();
             anyhow::bail!("missing socket address")
@@ -119,7 +119,7 @@ impl Args {
     /// The HTTP server address that was passed as a command-line argument to the program. If no
     /// HTTP server address was passed, this method returns `None`.
     ///
-    pub fn sockaddr(&mut self) -> &str {
-        &self.sockaddr
+    pub fn http_addr(&mut self) -> &str {
+        &self.http_addr
     }
 }

@@ -90,8 +90,8 @@ pub trait GatewayClient: Sized + Send {
 /// Gateway
 ///
 pub struct Gateway<T: GatewayClient> {
-    /// Address of the gateway.
-    addr: SocketAddr,
+    /// Address of the gateway for HTTP traffic.
+    http_addr: SocketAddr,
     /// Transmit endpoint for messages to clients.
     gateway_client_tx: UnboundedSender<(SocketAddr, Message)>,
     /// Receive endpoint for messages from clients.
@@ -124,14 +124,14 @@ impl<T: GatewayClient> Gateway<T> {
     ///
     /// # Parameters
     ///
-    /// - `addr`: Address of the gateway.
+    /// - `http_addr`: Address of the gateway for HTTP traffic.
     ///
     /// # Returns
     ///
     /// A new gateway.
     ///
     pub fn new(
-        addr: SocketAddr,
+        http_addr: SocketAddr,
     ) -> (Gateway<T>, UnboundedSender<Message>, UnboundedReceiver<Message>) {
         // Create an asynchronous channel to enable communication from the gateway to the VM.
         let (gateway_vm_tx, vm_rx): (UnboundedSender<Message>, UnboundedReceiver<Message>) =
@@ -147,7 +147,7 @@ impl<T: GatewayClient> Gateway<T> {
 
         (
             Self {
-                addr,
+                http_addr,
                 gateway_client_rx,
                 gateway_client_tx,
                 gateway_vm_tx,
@@ -171,7 +171,7 @@ impl<T: GatewayClient> Gateway<T> {
     ///
     #[tokio::main]
     pub async fn run(&mut self) -> Result<()> {
-        let listener: TcpListener = TcpListener::bind(self.addr).await?;
+        let listener: TcpListener = TcpListener::bind(self.http_addr).await?;
         loop {
             tokio::select! {
                 // Attempt to accept a new client.
