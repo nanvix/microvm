@@ -16,6 +16,7 @@ use ::std::{
     pin::Pin,
 };
 use ::sys::{
+    config,
     ipc::Message,
     pm::ProcessIdentifier,
 };
@@ -455,7 +456,8 @@ impl<T: GatewayClient> Gateway<T> {
                     }
 
                     // Read the reply from the system daemon.
-                    let mut bytes: [u8; Message::TOTAL_SIZE] = [0; Message::TOTAL_SIZE];
+                    let mut bytes: [u8; config::kernel::IPC_MESSAGE_SIZE] =
+                        [0; config::kernel::IPC_MESSAGE_SIZE];
                     match systemd_conn.read_exact(&mut bytes).await {
                         Ok(_) => {
                             let reply: Message = match Message::try_from_bytes(bytes) {
