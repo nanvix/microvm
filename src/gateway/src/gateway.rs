@@ -96,10 +96,10 @@ pub struct Gateway<T: GatewayClient> {
     gateway_client_tx: UnboundedSender<(SocketAddr, Message)>,
     /// Receive endpoint for messages from clients.
     gateway_client_rx: UnboundedReceiver<(SocketAddr, Message)>,
-    /// Transmit endpoint for messages to the service.
-    gateway_service_tx: UnboundedSender<Message>,
-    /// Receive endpoint for messages from the service.
-    gateway_service_rx: UnboundedReceiver<Message>,
+    /// Transmit endpoint for messages to the VM.
+    gateway_vm_tx: UnboundedSender<Message>,
+    /// Receive endpoint for messages from the VM.
+    gateway_vm_rx: UnboundedReceiver<Message>,
     /// Lookup tables.
     lookup_tables: GatewayLookupTable,
     /// Marker to force ownership over [`GatewayClient`].
@@ -133,17 +133,13 @@ impl<T: GatewayClient> Gateway<T> {
     pub fn new(
         addr: SocketAddr,
     ) -> (Gateway<T>, UnboundedSender<Message>, UnboundedReceiver<Message>) {
-        // Create an asynchronous channel to enable communication from the gateway to the service.
-        let (gateway_service_tx, service_rx): (
-            UnboundedSender<Message>,
-            UnboundedReceiver<Message>,
-        ) = mpsc::unbounded_channel();
+        // Create an asynchronous channel to enable communication from the gateway to the VM.
+        let (gateway_vm_tx, vm_rx): (UnboundedSender<Message>, UnboundedReceiver<Message>) =
+            mpsc::unbounded_channel();
 
-        // Create an asynchronous channel to enable communication from the service to the gateway.
-        let (service_tx, gateway_service_rx): (
-            UnboundedSender<Message>,
-            UnboundedReceiver<Message>,
-        ) = mpsc::unbounded_channel();
+        // Create an asynchronous channel to enable communication from the VM to the gateway.
+        let (vm_tx, gateway_vm_rx): (UnboundedSender<Message>, UnboundedReceiver<Message>) =
+            mpsc::unbounded_channel();
 
         // Create an asynchronous channel to enable communication from the client to the gateway.
         let (gateway_client_tx, gateway_client_rx): (ClientGatewayTx, ClientGatewayRx) =
@@ -154,13 +150,13 @@ impl<T: GatewayClient> Gateway<T> {
                 addr,
                 gateway_client_rx,
                 gateway_client_tx,
-                gateway_service_tx,
-                gateway_service_rx,
+                gateway_vm_tx,
+                gateway_vm_rx,
                 lookup_tables: GatewayLookupTable::new(),
                 _phantom: std::marker::PhantomData,
             },
-            service_tx,
-            service_rx,
+            vm_tx,
+            vm_rx,
         )
     }
 
@@ -200,9 +196,9 @@ impl<T: GatewayClient> Gateway<T> {
                         }
                     }
                 },
-                // Attempt to receive a message from the service.
-                Some(message) = self.gateway_service_rx.recv() => {
-                    if let Err(e) = self.handle_service_message(message).await {
+                // Attempt to receive a message from the VM.
+                Some(message) = self.gateway_vm_rx.recv() => {
+                    if let Err(e) = self.handle_vm_message(message).await {
                         warn!("run(): {:?}", e);
                     }
                 }
@@ -297,8 +293,8 @@ impl<T: GatewayClient> Gateway<T> {
         let pid: ProcessIdentifier = message.source;
         self.lookup_tables.register_pid(pid, addr).await?;
 
-        // Forward message to the service.
-        self.gateway_service_tx.send(message)?;
+        // Forward message to the VM.
+        self.gateway_vm_tx.send(message)?;
 
         Ok(())
     }
@@ -306,7 +302,7 @@ impl<T: GatewayClient> Gateway<T> {
     ///
     /// # Description
     ///
-    /// Handles a message from the service.
+    /// Handles a message from the VM.
     ///
     /// # Parameters
     ///
@@ -316,9 +312,9 @@ impl<T: GatewayClient> Gateway<T> {
     ///
     /// A future that resolves to `Ok(())` on success, or `Err(e)` on failure.
     ///
-    async fn handle_service_message(&mut self, message: Message) -> Result<()> {
+    async fn handle_vm_message(&mut self, message: Message) -> Result<()> {
         trace!(
-            "handle_service_message(): message.source={:?}, message.destination={:?}",
+            "handle_vm_message(): message.source={:?}, message.destination={:?}",
             message.source,
             message.destination
         );
@@ -332,7 +328,7 @@ impl<T: GatewayClient> Gateway<T> {
                 if let Err(e) = client.send(Ok(message)) {
                     let reason: String =
                         format!("failed to send message to client (error={:?})", e);
-                    error!("handle_service_message(): {}", reason);
+                    error!("handle_vm_message(): {}", reason);
                     anyhow::bail!(reason);
                 }
             },
