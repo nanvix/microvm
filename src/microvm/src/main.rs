@@ -84,9 +84,16 @@ fn main() -> Result<()> {
     let memory_size: usize = args.memory_size();
     let stderr: Option<String> = args.take_vm_stderr();
     let http_addr: SocketAddr = args.http_addr().parse()?;
+    let systemd_addr: Option<String> = args.systemd_addr();
 
-    let mut vmm: Vmm =
-        vmm::Vmm::new(memory_size, &kernel_filename, initrd_filename, stderr, http_addr)?;
+    let mut vmm: Vmm = vmm::Vmm::new(
+        memory_size,
+        &kernel_filename,
+        initrd_filename,
+        stderr,
+        http_addr,
+        systemd_addr,
+    )?;
 
     vmm.run()?;
 

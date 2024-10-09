@@ -61,7 +61,7 @@ fn main() -> Result<()> {
     let http_addr: SocketAddr = args.http_addr().parse()?;
 
     // Create gateway.
-    let (mut gateway, tx, mut rx) = Gateway::<HttpGatewayClient>::new(http_addr);
+    let (mut gateway, tx, mut rx) = Gateway::<HttpGatewayClient>::new(http_addr, None)?;
 
     // Spawn a thread to run the gateway and handle incoming messages.
     let _gateway_thread: JoinHandle<()> = thread::spawn(move || {
