@@ -37,12 +37,20 @@ pub struct GatewayLookupTable {
     pids_to_clients: Arc<RwLock<HashMap<u32, SocketAddr>>>,
 }
 
+///
+/// Gateway Peer
+///
+#[derive(Clone)]
+pub enum GatewayPeer {
+    Client(UnboundedSender<Result<Message, anyhow::Error>>),
+}
+
 //==================================================================================================
 // Implementations
 //==================================================================================================
 
 // Type aliases to make clippy happy.
-type LookupTable = HashMap<SocketAddr, UnboundedSender<Result<Message, anyhow::Error>>>;
+type LookupTable = HashMap<SocketAddr, GatewayPeer>;
 type PidTable = HashMap<u32, SocketAddr>;
 type LookupTableReadGuard<'a> = RwLockReadGuard<'a, LookupTable>;
 type LookupTableWriteGuard<'a> = RwLockWriteGuard<'a, LookupTable>;
@@ -79,11 +87,7 @@ impl GatewayLookupTable {
     ///
     /// A future that resolves to `Ok(())` on success, or `Err(e)` on failure.
     ///
-    pub async fn register_addr(
-        &mut self,
-        addr: SocketAddr,
-        client_tx: UnboundedSender<Result<Message, anyhow::Error>>,
-    ) -> Result<()> {
+    pub async fn register_addr(&mut self, addr: SocketAddr, client_tx: GatewayPeer) -> Result<()> {
         trace!("register_addr(): addr={:?}", addr);
 
         // Lock tables.
@@ -207,10 +211,7 @@ impl GatewayLookupTable {
     ///
     /// The client associated with the process identifier.
     ///
-    pub async fn lookup_pid(
-        &self,
-        pid: ProcessIdentifier,
-    ) -> Result<UnboundedSender<Result<Message, anyhow::Error>>> {
+    pub async fn lookup_pid(&self, pid: ProcessIdentifier) -> Result<GatewayPeer> {
         trace!("lookup(): pid={:?}", pid);
 
         // Lock tables for reading.
@@ -256,10 +257,7 @@ impl GatewayLookupTable {
     ///
     /// The client associated with the address.
     ///
-    pub async fn lookup_addr(
-        &self,
-        addr: SocketAddr,
-    ) -> Result<UnboundedSender<Result<Message, anyhow::Error>>> {
+    pub async fn lookup_addr(&self, addr: SocketAddr) -> Result<GatewayPeer> {
         trace!("lookup_addr(): addr={:?}", addr);
 
         // Lock tables for reading.

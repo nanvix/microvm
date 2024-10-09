@@ -5,7 +5,10 @@
 // Imports
 //==================================================================================================
 
-use crate::route::GatewayLookupTable;
+use crate::route::{
+    GatewayLookupTable,
+    GatewayPeer,
+};
 use ::anyhow::Result;
 use ::std::{
     future::Future,
@@ -181,14 +184,18 @@ impl<T: GatewayClient> Gateway<T> {
                         warn!("run(): {:?}", e);
                    }
                 },
-                // Attempt to receive a message from any client.
+                // Attempt to receive a message from any peer.
                 Some((addr, message)) = self.gateway_client_rx.recv() => {
                     if let Err(e) = self.handle_client_message(addr, message).await {
-                        // Failed to handle client message, send error back to the client.
+                        // Failed to handle peer message, send error back to the client.
                         warn!("run(): {:?}", e);
-                        if let Ok(client) = self.lookup_tables.lookup_addr(addr).await {
-                            if let Err(e) = client.send(Err(e)) {
-                                error!("run(): {:?}", e);
+                        if let Ok(peer) = self.lookup_tables.lookup_addr(addr).await {
+                            match peer {
+                                GatewayPeer::Client(client) => {
+                                    if let Err(e) = client.send(Err(e)) {
+                                        error!("run(): {:?}", e);
+                                    }
+                                }
                             }
                         }
                     }
@@ -228,7 +235,9 @@ impl<T: GatewayClient> Gateway<T> {
             T::run(T::new(addr, self.gateway_client_tx.clone(), client_rx), stream);
 
         // Attempt to register the client.
-        self.lookup_tables.register_addr(addr, client_tx).await?;
+        self.lookup_tables
+            .register_addr(addr, crate::route::GatewayPeer::Client(client_tx))
+            .await?;
 
         let lookup_tables: GatewayLookupTable = self.lookup_tables.clone();
         tokio::task::spawn(async move {
@@ -314,15 +323,19 @@ impl<T: GatewayClient> Gateway<T> {
             message.destination
         );
 
-        // Retrieve client.
-        let client: UnboundedSender<Result<Message, anyhow::Error>> =
-            self.lookup_tables.lookup_pid(message.destination).await?;
+        // Retrieve peer.
+        let peer: GatewayPeer = self.lookup_tables.lookup_pid(message.destination).await?;
 
-        // Forward the message to the client.
-        if let Err(e) = client.send(Ok(message)) {
-            let reason: String = format!("failed to send message to client (error={:?})", e);
-            error!("handle_service_message(): {}", reason);
-            anyhow::bail!(reason);
+        match peer {
+            GatewayPeer::Client(client) => {
+                // Forward the message to the client.
+                if let Err(e) = client.send(Ok(message)) {
+                    let reason: String =
+                        format!("failed to send message to client (error={:?})", e);
+                    error!("handle_service_message(): {}", reason);
+                    anyhow::bail!(reason);
+                }
+            },
         }
 
         Ok(())
