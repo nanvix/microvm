@@ -131,6 +131,7 @@ impl HttpGatewayClient {
                 sys::pm::ProcessIdentifier::from(message_json.source),
                 sys::pm::ProcessIdentifier::from(message_json.destination),
                 sys::ipc::MessageType::Ikc,
+                None,
                 [0; Message::PAYLOAD_SIZE],
             );
 

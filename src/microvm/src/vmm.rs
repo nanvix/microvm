@@ -61,7 +61,8 @@ impl Vmm {
         kernel_filename: &str,
         initrd_filename: Option<String>,
         stderr: Option<String>,
-        sockaddr: SocketAddr,
+        http_addr: SocketAddr,
+        systemd_addr: Option<String>,
     ) -> Result<Self> {
         crate::timer!("vmm_creation");
 
@@ -70,7 +71,7 @@ impl Vmm {
             Gateway<HttpGatewayClient>,
             UnboundedSender<Message>,
             UnboundedReceiver<Message>,
-        ) = Gateway::<HttpGatewayClient>::new(sockaddr);
+        ) = Gateway::<HttpGatewayClient>::new(http_addr, systemd_addr)?;
 
         // Spawn I/O thread.
         let _io_thread: JoinHandle<()> = thread::spawn(move || {

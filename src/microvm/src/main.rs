@@ -83,10 +83,17 @@ fn main() -> Result<()> {
     let initrd_filename: Option<String> = args.initrd_filename();
     let memory_size: usize = args.memory_size();
     let stderr: Option<String> = args.take_vm_stderr();
-    let sockaddr: SocketAddr = args.sockaddr().parse()?;
+    let http_addr: SocketAddr = args.http_addr().parse()?;
+    let systemd_addr: Option<String> = args.systemd_addr();
 
-    let mut vmm: Vmm =
-        vmm::Vmm::new(memory_size, &kernel_filename, initrd_filename, stderr, sockaddr)?;
+    let mut vmm: Vmm = vmm::Vmm::new(
+        memory_size,
+        &kernel_filename,
+        initrd_filename,
+        stderr,
+        http_addr,
+        systemd_addr,
+    )?;
 
     vmm.run()?;
 
