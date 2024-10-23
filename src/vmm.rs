@@ -11,6 +11,7 @@ extern crate kvm_bindings;
 extern crate kvm_ioctls;
 
 use crate::{
+    io::IoThread,
     kvm::vmem::VirtualMemory,
     microvm::{
         self,
@@ -18,10 +19,6 @@ use crate::{
     },
 };
 use ::anyhow::Result;
-use ::gateway::{
-    Gateway,
-    HttpGatewayClient,
-};
 use ::std::{
     cell::RefCell,
     fs::File,
@@ -29,18 +26,20 @@ use ::std::{
     mem,
     net::SocketAddr,
     rc::Rc,
-    thread::{
-        self,
-        JoinHandle,
+    sync::{
+        mpsc,
+        mpsc::{
+            Receiver,
+            Sender,
+            TryRecvError,
+        },
     },
+    thread::JoinHandle,
+    time::Duration,
 };
 use ::sys::ipc::{
     Message,
     MessageType,
-};
-use ::tokio::sync::mpsc::{
-    UnboundedReceiver,
-    UnboundedSender,
 };
 
 //==================================================================================================
@@ -61,24 +60,17 @@ impl Vmm {
         kernel_filename: &str,
         initrd_filename: Option<String>,
         stderr: Option<String>,
-        http_addr: SocketAddr,
-        systemd_addr: Option<String>,
+        gateway_addr: Option<SocketAddr>,
     ) -> Result<Self> {
         crate::timer!("vmm_creation");
 
-        // Create gateway.
-        let (mut gateway, vm_tx, vm_rx): (
-            Gateway<HttpGatewayClient>,
-            UnboundedSender<Message>,
-            UnboundedReceiver<Message>,
-        ) = Gateway::<HttpGatewayClient>::new(http_addr, systemd_addr)?;
+        let (vm_tx, gateway_rx) = mpsc::channel::<Message>();
+        let (gateway_tx, vm_rx) = mpsc::channel::<Message>();
+        let read_timeout: Duration = Duration::from_millis(1);
 
         // Spawn I/O thread.
-        let _io_thread: JoinHandle<()> = thread::spawn(move || {
-            if let Err(e) = gateway.run() {
-                error!("gateway thread failed: {:?}", e);
-            }
-        });
+        let _io_thread: JoinHandle<Result<()>> =
+            IoThread::spawn(gateway_addr, gateway_rx, gateway_tx, read_timeout);
 
         // Input function used for emulating I/O port reads.
         let input: Box<microvm::InputFn> = Self::build_input_fn(vm_rx);
@@ -146,7 +138,7 @@ impl Vmm {
         Ok(file_writer)
     }
 
-    fn build_input_fn(mut input_queue: UnboundedReceiver<Message>) -> Box<microvm::InputFn> {
+    fn build_input_fn(input_queue: Receiver<Message>) -> Box<microvm::InputFn> {
         // Input function used for emulating I/O port reads.
         let input = move |vm: &Rc<RefCell<VirtualMemory>>, data, size| -> Result<()> {
             // Check for invalid operand size.
@@ -162,13 +154,13 @@ impl Vmm {
                     vm.borrow_mut().write_bytes(data as u64, &msg.to_bytes())?;
                 },
                 // No message available.
-                Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
+                Err(TryRecvError::Empty) => {
                     let empty_message = Message::default();
                     vm.borrow_mut()
                         .write_bytes(data as u64, &empty_message.to_bytes())?;
                 },
                 // Channel has disconnected.
-                Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
+                Err(TryRecvError::Disconnected) => {
                     let reason: String = "channel has been disconnected".to_string();
                     error!("input(): {}", reason);
                     anyhow::bail!(reason);
@@ -183,7 +175,7 @@ impl Vmm {
 
     fn build_output_fn(
         mut file_writer: Box<dyn Write>,
-        queue: UnboundedSender<Message>,
+        queue: Sender<Message>,
     ) -> Box<microvm::OutputFn> {
         // Output function used for emulating I/O port writes.
         let output = move |vm: &Rc<RefCell<VirtualMemory>>, data, size| -> Result<()> {

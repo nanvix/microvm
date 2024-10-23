@@ -27,6 +27,3 @@ pub const STDIN_PORT: u16 = 0xea;
 
 /// I/O port that enables the guest to invoke functionalities of the virtual machine monitor.
 pub const VMM_PORT: u16 = 0x604;
-
-/// Default socket address for the HTTP server.
-pub const DEFAULT_HTTP_SOCKADDR: &str = "127.0.0.1:8080";
