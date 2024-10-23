@@ -9,7 +9,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.91"
-flexi_logger = "0.29.0"
+flexi_logger = "0.29.4"
 log = "0.4.22"
 kernel = { git = "https://github.com/nanvix/kernel", branch = "releases/v1.0.0", default-features = false }
 cfg-if = "1.0.0"
