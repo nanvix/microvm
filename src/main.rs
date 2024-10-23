@@ -36,6 +36,7 @@ macro_rules! timer {
 mod args;
 mod config;
 mod elf;
+mod io;
 mod logging;
 mod microvm;
 mod pal;
@@ -83,17 +84,10 @@ fn main() -> Result<()> {
     let initrd_filename: Option<String> = args.initrd_filename();
     let memory_size: usize = args.memory_size();
     let stderr: Option<String> = args.take_vm_stderr();
-    let http_addr: SocketAddr = args.http_addr().parse()?;
-    let systemd_addr: Option<String> = args.systemd_addr();
+    let gateway_addr: Option<SocketAddr> = args.gateway_addr();
 
-    let mut vmm: Vmm = vmm::Vmm::new(
-        memory_size,
-        &kernel_filename,
-        initrd_filename,
-        stderr,
-        http_addr,
-        systemd_addr,
-    )?;
+    let mut vmm: Vmm =
+        Vmm::new(memory_size, &kernel_filename, initrd_filename, stderr, gateway_addr)?;
 
     vmm.run()?;
 

@@ -16,6 +16,7 @@ use crate::config;
 use ::anyhow::Result;
 use ::std::{
     env,
+    net::SocketAddr,
     process,
 };
 
@@ -37,10 +38,8 @@ pub struct Args {
     memory_size: usize,
     /// Standard error.
     vm_stderr: Option<String>,
-    /// HTTP server address.
-    http_addr: String,
-    /// System daemon address.
-    systemd_addr: Option<String>,
+    /// Gateway address.
+    gateway_addr: Option<SocketAddr>,
 }
 
 //==================================================================================================
@@ -50,8 +49,6 @@ pub struct Args {
 impl Args {
     /// Command-line option for printing the help message.
     const OPT_HELP: &'static str = "-help";
-    /// Command-line for HTTP.
-    const OPT_HTTP: &'static str = "-http";
     /// Command-line option for initrd file.
     const OPT_INITRD: &'static str = "-initrd";
     /// Command-line option for the kernel file.
@@ -60,8 +57,8 @@ impl Args {
     const OPT_MEMORY_SIZE: &'static str = "-memory";
     /// Command-line option for the standard error.
     const OPT_STDERR: &'static str = "-stderr";
-    /// Command-line option for system daemon address.
-    const OPT_SYSTEMD: &'static str = "-systemd";
+    /// Command-line option for gateway address.
+    const OPT_GATEWAY: &'static str = "-gateway";
 
     ///
     /// # Description
@@ -80,8 +77,7 @@ impl Args {
         let mut initrd_filename: Option<String> = None;
         let mut memory_size: usize = config::DEFAULT_MEMORY_SIZE;
         let mut vm_stderr: Option<String> = None;
-        let mut http_addr: String = config::DEFAULT_HTTP_SOCKADDR.to_string();
-        let mut systemd_addr: Option<String> = None;
+        let mut gateway_addr: Option<SocketAddr> = None;
 
         // Parse command-line arguments.
         let mut i: usize = 1;
@@ -91,11 +87,6 @@ impl Args {
                 Self::OPT_HELP => {
                     Self::usage();
                     process::exit(0);
-                },
-                // Set HTTP server.
-                Self::OPT_HTTP if i + 1 < args.len() => {
-                    http_addr = args[i + 1].clone();
-                    i += 1;
                 },
                 // Set initrd file.
                 Self::OPT_INITRD if i + 1 < args.len() => {
@@ -147,9 +138,9 @@ impl Args {
                     vm_stderr = Some(args[i + 1].clone());
                     i += 1;
                 },
-                // Set system daemon address.
-                Self::OPT_SYSTEMD if i + 1 < args.len() => {
-                    systemd_addr = Some(args[i + 1].clone());
+                // Set gateway address.
+                Self::OPT_GATEWAY if i + 1 < args.len() => {
+                    gateway_addr = Some(args[i + 1].parse()?);
                     i += 1;
                 },
 
@@ -182,8 +173,7 @@ impl Args {
             initrd_filename,
             memory_size,
             vm_stderr,
-            http_addr,
-            systemd_addr,
+            gateway_addr,
         })
     }
 
@@ -202,7 +192,7 @@ impl Args {
             Self::OPT_MEMORY_SIZE,
             Self::OPT_INITRD,
             Self::OPT_STDERR,
-            Self::OPT_HTTP
+            Self::OPT_GATEWAY
         );
     }
 
@@ -264,26 +254,13 @@ impl Args {
     ///
     /// # Description
     ///
-    /// Returns the HTTP server address that was passed as a command-line argument to the program.
+    /// Returns the gateway address that was passed as a command-line argument to the program.
     ///
     /// # Returns
     ///
-    /// The HTTP server address that was passed as a command-line argument to the program.
+    /// The gateway address that was passed as a command-line argument to the program.
     ///
-    pub fn http_addr(&mut self) -> &str {
-        &self.http_addr
-    }
-
-    ///
-    /// # Description
-    ///
-    /// Returns the system daemon address that was passed as a command-line argument to the program.
-    ///
-    /// # Returns
-    ///
-    /// The system daemon address that was passed as a command-line argument to the program.
-    ///
-    pub fn systemd_addr(&mut self) -> Option<String> {
-        self.systemd_addr.take()
+    pub fn gateway_addr(&mut self) -> Option<SocketAddr> {
+        self.gateway_addr.take()
     }
 }
